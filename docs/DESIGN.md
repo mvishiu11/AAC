@@ -241,7 +241,238 @@ For larger graphs, we propose:
 
 ---
 
-## 7. Expected Outcomes
+## 7.Pseudocode
+
+### 1) Define the size of a graph
+
+```text
+FUNCTION graph_size(G):
+  # G is (V, E) with multiplicity m_G(u,v) >= 0  (0 if no edge)
+
+  n_vertices ← |V(G)|
+  n_edges_with_multiplicity ← 0
+  FOR each unordered pair {u,v} in V(G):
+      n_edges_with_multiplicity += m_G(u,v)
+  FOR each vertex u in V(G):               # include self-loops once
+      n_edges_with_multiplicity += max(0, m_G(u,u))
+
+  RETURN n_vertices + n_edges_with_multiplicity
+```
+
+Notes:
+
+* For simple graphs, multiplicity is 0/1 and this reduces to `|V| + |E|`.
+* You can choose a different weighting (e.g., `α|V| + β|E|`) if desired.
+
+---
+
+### 2) Define a distance metric between two graphs
+
+```text
+# Asymmetric, injective edge-edit distance (only insertions in H)
+FUNCTION distance_injective_insertions(G, H):
+  IF |V(G)| == 0: RETURN 0
+  IF |V(G)| > |V(H)|: RETURN +∞   # unless vertex insertions are allowed
+
+  # Over all injective mappings φ : V(G) -> V(H),
+  # take minimal number of missing multiplicities
+  best ← +∞
+  FOR each injective mapping φ:
+      deficit ← 0
+      FOR each unordered pair {u,v} in V(G) including self-loops:
+          need ← m_G(u,v)
+          have ← m_H(φ(u), φ(v))
+          deficit += max(0, need - have)
+      best ← min(best, deficit)
+
+  RETURN best
+```
+
+Notes:
+
+* This equals the **minimal extension cost** of making H contain G by adding edges.
+* If you allow deletions/labels, extend the cost terms accordingly (GED).
+
+---
+
+### 3) Check if G is a subgraph of H
+
+```text
+FUNCTION is_subgraph(G, H):
+  IF |V(G)| == 0: RETURN True
+  IF |V(G)| > |V(H)|: RETURN False
+
+  # Build candidate matrix M[i][j] = "v_i in G can map to u_j in H"
+  M ← initial_candidates_by_degree_and_labels(G, H)
+
+  # Refine candidates by local feasibility (Ullmann-style)
+  IF NOT refine_candidates_multiplicity(G, H, M):
+      RETURN False
+
+  # Backtrack over injective mappings
+  order ← vertices_of_G_sorted_by_desc_degree()
+  used_H ← empty_set
+  mapping ← empty_map
+
+  FUNCTION dfs(t):
+      IF t == |V(G)|:
+          RETURN True    # found a full embedding
+      i ← order[t]
+      FOR each j in V(H) WHERE M[i][j] AND j ∉ used_H:
+          IF consistent_multiplicities_with_partial(mapping ∪ {i→j}):
+              used_H.add(j); mapping[i] ← j
+              IF dfs(t+1): RETURN True
+              used_H.remove(j); remove mapping[i]
+      RETURN False
+
+  RETURN dfs(0)
+```
+
+---
+
+### 4) If not, find the minimal extension H′ ⊇ H such that G ⊆ H′
+
+```text
+FUNCTION minimal_extension(G, H):
+  # Branch-and-bound over injective mappings to minimize "deficit" (missing edges)
+  best_cost ← +∞
+  best_map ← None
+
+  order ← vertices_of_G_sorted_by_desc_degree()
+  used_H ← empty_set
+  mapping ← empty_map
+
+  FUNCTION incremental_deficit(i→j, mapping):
+      add ← 0
+      # count self-loop at i
+      add += max(0, m_G(i,i) - m_H(j,j))
+      # count edges to already-mapped vertices
+      FOR each a in mapping.keys():
+          ja ← mapping[a]
+          add += max(0, m_G(i,a) - m_H(j,ja))
+      RETURN add
+
+  FUNCTION full_deficit(mapping):
+      total ← 0
+      FOR each unordered pair {a,b} in V(G) (include a=b for self-loops):
+          ja ← mapping[a]; jb ← mapping[b]
+          total += max(0, m_G(a,b) - m_H(ja,jb))
+      RETURN total
+
+  FUNCTION dfs(t, cost_so_far):
+      IF cost_so_far ≥ best_cost: RETURN
+      IF t == |V(G)|:
+          total ← full_deficit(mapping)
+          IF total < best_cost:
+              best_cost ← total; best_map ← mapping.copy()
+          RETURN
+
+      i ← order[t]
+      FOR each j in V(H) WHERE j ∉ used_H:
+          add ← incremental_deficit(i→j, mapping)
+          new_cost ← cost_so_far + add
+          IF new_cost ≥ best_cost: CONTINUE
+          mapping[i] ← j; used_H.add(j)
+          dfs(t+1, new_cost)
+          used_H.remove(j); remove mapping[i]
+
+  dfs(0, 0)
+
+  # Construct H′ change list from best_map
+  missing_edges ← aggregate_all_pairs_missing_from(best_map)
+  RETURN (best_cost, best_map, missing_edges)
+```
+
+Notes:
+
+* `missing_edges` lists `(u_idx, v_idx, k)` telling how many parallel edges to add between those `H` vertices.
+* If `best_cost == 0` then G is already a subgraph of H.
+
+---
+
+### 5) For multigraphs: enumerate or count all possible subgraph mappings
+
+```text
+FUNCTION enumerate_subgraphs(G, H):
+  IF |V(G)| == 0 OR |V(G)| > |V(H)|: RETURN
+
+  M ← initial_candidates_by_degree_and_labels(G, H)
+  IF NOT refine_candidates_multiplicity(G, H, M): RETURN
+
+  order ← vertices_of_G_sorted_by_desc_degree()
+  used_H ← empty_set
+  mapping ← empty_map
+
+  FUNCTION dfs(t):
+      IF t == |V(G)|:
+          YIELD mapping.copy()
+          RETURN
+      i ← order[t]
+      FOR each j in V(H) WHERE M[i][j] AND j ∉ used_H:
+          IF consistent_multiplicities_with_partial(mapping ∪ {i→j}):
+              mapping[i] ← j; used_H.add(j)
+              dfs(t+1)
+              used_H.remove(j); remove mapping[i]
+
+  dfs(0)
+
+FUNCTION count_subgraphs(G, H):
+  count ← 0
+  FOR each mapping IN enumerate_subgraphs(G, H):
+      count += 1
+  RETURN count
+```
+
+Notes:
+
+* For unlabeled counting where automorphisms matter, postprocess to factor out symmetries if needed.
+* This is **#P-complete**; feasible only for small graphs.
+
+---
+
+### 6) If exact is exponential, propose heuristics / approximations
+
+```text
+FUNCTION heuristic_min_extension(G, H, time_budget):
+  # 1) Build scores for mapping v_i → u_j (degree, loop presence, neighbor histograms)
+  S ← score_matrix(G, H)
+
+  # 2) Get an injective seed mapping via linear assignment (Hungarian) on -S
+  φ ← assignment_minimize(-S)
+
+  # 3) Local search: iteratively improve φ by swapping targets to reduce deficit
+  best ← φ; best_cost ← full_deficit(φ)
+  REPEAT until no improvement or time_budget exceeded:
+      improved ← False
+      FOR each pair (i, k) in V(G):
+          φ' ← φ with u targets for i and k swapped
+          c' ← full_deficit(φ')
+          IF c' < best_cost:
+              best ← φ'; best_cost ← c'; improved ← True
+              BREAK
+      φ ← best
+  RETURN (best_cost, best)
+
+FUNCTION sampling_count(G, H, samples):
+  # Monte Carlo estimate of count: sample random injective φ and test feasibility
+  success ← 0
+  FOR s in 1..samples:
+      φ ← random_injective_mapping(V(G) → V(H))
+      IF preserves_multiplicities(G, H, φ):
+          success += 1
+  estimate ← success * P(|V(H)|, |V(G)|) / samples
+  RETURN estimate
+```
+
+Other options:
+
+* **Seed-and-extend (VF2-like)** with a cost bound (branch-and-bound, stop early).
+* **LP/MILP relaxation + rounding** for moderate sizes.
+* **Graph embeddings (node2vec/GNN)** to filter candidates before search.
+
+---
+
+## 8. Expected Outcomes
 
 By following this plan, we will achieve:
 - A theoretical and computational foundation for comparing and embedding multigraphs.
