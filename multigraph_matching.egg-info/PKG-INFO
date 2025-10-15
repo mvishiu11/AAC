@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: multigraph-matching
+Version: 0.1.0
+Summary: Subgraph matching & minimal extension for undirected multigraphs
+Requires-Python: >=3.12

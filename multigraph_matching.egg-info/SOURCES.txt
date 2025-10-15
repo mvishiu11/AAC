@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+multigraph/__init__.py
+multigraph/distance.py
+multigraph/extension.py
+multigraph/graph.py
+multigraph/ullman.py
+multigraph_matching.egg-info/PKG-INFO
+multigraph_matching.egg-info/SOURCES.txt
+multigraph_matching.egg-info/dependency_links.txt
+multigraph_matching.egg-info/top_level.txt
