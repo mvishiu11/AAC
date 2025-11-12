@@ -1,4 +1,5 @@
 #include "../include/Graph.hpp"
+#include <functional>
 
 int Graph::getSize() {
     int size = 0;
@@ -13,14 +14,21 @@ int Graph::getSize() {
 }
 
 bool Graph::hasNSubgraphs(Graph& G, int N) {
+    // !!! STILL DOESN'T WORK PROPERLY
+    
     if (G.getVerticesCount() == 0 || G.getVerticesCount() > this->getVerticesCount()) {
         return true;
     }
-
+    std::cout<<"Checking for subgraph isomorphism of pattern graph with " << G.getVerticesCount() << " vertices in host graph with " << this->getVerticesCount() << " vertices." << std::endl;
     int Hn = this->getVerticesCount();
     int Gn = G.getVerticesCount();
 
-    int** M = (int**)malloc(sizeof(int) * Hn * Gn);
+    int** M = (int**)malloc(sizeof(int*) * Hn);
+    for(int i = 0; i < Hn; i++) {
+        M[i] = (int*)malloc(sizeof(int) * Gn);
+    }
+
+    std::cout<<"Initializing candidate matrix..." << std::endl;
 
     for(int i = 0; i < Hn; i++) {
         for(int j = 0; j < Gn; j++) {
@@ -32,7 +40,7 @@ bool Graph::hasNSubgraphs(Graph& G, int N) {
             }
         }
     }
-
+    std::cout<<"Refining candidate matrix..." << std::endl;
     // Iterative neighbourhood refinement (prune until fixpoint)
     bool changed = true;
     while (changed) {
@@ -67,12 +75,12 @@ bool Graph::hasNSubgraphs(Graph& G, int N) {
                 // Check incoming neighbours of pattern-vertex j
                 bool ok_in = true;
                 for (int u = 0; u < Gn; ++u) {
-                    int mult_pattern = G.getOutDegree(u, j); // multiplicity of (u->j) in G
+                    int mult_pattern = G.getInDegree(j, u); // multiplicity of (u->j) in G
                     if (mult_pattern <= 0) continue;
 
                     bool found = false;
                     for (int v = 0; v < Hn; ++v) {
-                        int mult_host = this->getOutDegree(v, i); // multiplicity of (v->i) in H
+                        int mult_host = this->getInDegree(i, v); // multiplicity of (v->i) in H
                         if (mult_host >= mult_pattern && M[v][u] == 1) {
                             found = true;
                             break;
@@ -95,4 +103,96 @@ bool Graph::hasNSubgraphs(Graph& G, int N) {
         for (int i = 0; i < Hn; ++i) col_sum += M[i][j];
         if (col_sum == 0) return false;
     }
+
+    int* order = G.getVerticesByDegree();
+    int* used_H = new int[Hn];
+        std::vector<int> mapping(Gn, -1);
+    int count = 0;
+
+    std::function<bool(int)> DFS = [&](int t) -> bool {
+        std::cout << "DFS at depth " << t << std::endl;
+        std::cout << "Current mapping: ";
+        for (int i = 0; i < Gn; ++i) {
+            std::cout << mapping[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Current count: " << count << std::endl;
+
+        if (count >= N)
+            return true;
+
+        if (t == Gn) {
+            count++;
+            return false;
+        }
+
+        int i = order[t];
+
+        for (int j = 0; j < Hn; ++j) {
+            if (M[j][i] == 1 && !used_H[j]) {
+                std::cout << "Trying to map pattern vertex " << i << " to host vertex " << j << std::endl;
+                // check partial consistency
+                bool consistent = true;
+                for (int k = 0; k < t; ++k) {
+                    int i2 = order[k];
+                    if (mapping[i2] == -1) continue;
+
+                    // edge consistency
+                    if (G.getOutDegree(i2, i) > this->getOutDegree(mapping[i2], j))
+                        consistent = false;
+                    if (G.getInDegree(i2, i) > this->getInDegree(mapping[i2], j))
+                        consistent = false;
+
+                    if (!consistent) break;
+                }
+
+                if (!consistent) continue;
+
+                mapping[i] = j;
+                used_H[j] = 1;
+
+                if (DFS(t + 1))
+                    return true;
+
+                used_H[j] = 0;
+                mapping[i] = -1;
+            }
+        }
+        return false;
+    };
+
+    bool result = DFS(0);
+
+    for (int i = 0; i < Hn; ++i)
+        delete[] M[i];
+    delete[] M;
+    delete[] order;
+
+    return result;
+}
+
+
+int* Graph::getVerticesByDegree() {
+    // Step 1: Compute degrees of all vertices
+    std::vector<std::pair<int, int>> vertexDegrees; // pair<degree, index>
+
+    for (int i = 0; i < nodes; i++) {
+        int degree = getOutDegree(i) + getInDegree(i);
+        vertexDegrees.push_back({degree, i});
+    }
+
+    // Step 2: Sort vertices by degree (descending)
+    std::sort(vertexDegrees.begin(), vertexDegrees.end(),
+              [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  return a.first > b.first; // descending order
+              });
+
+    // Step 3: Create array of indices in sorted order
+    int* sortedVertices = new int[nodes];
+    for (int i = 0; i < nodes; i++) {
+        sortedVertices[i] = vertexDegrees[i].second;
+        std::cout << "Vertex: " << sortedVertices[i] << " Degree: " << vertexDegrees[i].first << std::endl;
+    }
+
+    return sortedVertices;
 }

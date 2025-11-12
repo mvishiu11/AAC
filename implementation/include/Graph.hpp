@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <algorithm>
 
 #pragma once
 
@@ -31,5 +32,6 @@ public:
         return inDegree;
     }
     bool hasNSubgraphs(Graph& G, int N=1);
+    int* getVerticesByDegree();
 
 };
