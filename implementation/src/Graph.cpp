@@ -1,5 +1,9 @@
 #include "../include/Graph.hpp"
 #include <functional>
+#include "Graph.hpp"
+#include <set>
+
+using namespace std;
 
 int Graph::getSize()
 {
@@ -136,11 +140,11 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
 
     int *order = G.getVerticesByDegree();
     int *used_H = new int[Hn]();
-    int *mapping = (int*)malloc(sizeof(int)*Gn);
-    std::fill(mapping, mapping+Gn, -1); 
+    int *mapping = (int *)malloc(sizeof(int) * Gn);
+    fill(mapping, mapping + Gn, -1);
     int count = 0;
 
-    std::function<bool(int)> DFS = [&](int t) -> bool
+    function<bool(int)> DFS = [&](int t) -> bool
     {
         if (count >= N)
             return true;
@@ -148,12 +152,12 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
         if (t == Gn)
         {
             count++;
-            std::cout << "Succesful mapping: ";
+            cout << "Succesful mapping: ";
             for (int i = 0; i < Gn; ++i)
             {
-                std::cout << mapping[i] << " ";
+                cout << mapping[i] << " ";
             }
-            std::cout << std::endl;
+            cout << endl;
             return false;
         }
 
@@ -210,7 +214,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
 int *Graph::getVerticesByDegree()
 {
     // Step 1: Compute degrees of all vertices
-    std::vector<std::pair<int, int>> vertexDegrees; // pair<degree, index>
+    vector<pair<int, int>> vertexDegrees; // pair<degree, index>
 
     for (int i = 0; i < nodes; i++)
     {
@@ -219,11 +223,11 @@ int *Graph::getVerticesByDegree()
     }
 
     // Step 2: Sort vertices by degree (descending)
-    std::sort(vertexDegrees.begin(), vertexDegrees.end(),
-              [](const std::pair<int, int> &a, const std::pair<int, int> &b)
-              {
-                  return a.first > b.first; // descending order
-              });
+    sort(vertexDegrees.begin(), vertexDegrees.end(),
+         [](const pair<int, int> &a, const pair<int, int> &b)
+         {
+             return a.first > b.first; // descending order
+         });
 
     // Step 3: Create array of indices in sorted order
     int *sortedVertices = new int[nodes];
@@ -233,4 +237,211 @@ int *Graph::getVerticesByDegree()
     }
 
     return sortedVertices;
+}
+
+void Graph::findMinimalExtension(Graph &G, int N)
+{
+    // Graph *H = this;
+
+    int Hn = this->getVerticesCount();
+    int Gn = G.getVerticesCount();
+
+    int *order = G.getVerticesByDegree();
+    int *used_H = new int[Hn]();
+    vector<int> mapping(Gn, -1);
+    vector<vector<vector<int>>> all_Edgesets;
+
+    function<void(vector<int>)> createEdgeset = [&](vector<int> mapping) -> void
+    {
+        vector<vector<int>> local_Edgeset(Hn, vector<int>(Hn, 0));
+        for (int a = 0; a < Gn; ++a)
+        {
+            for (int b = 0; b < Gn; ++b)
+            {
+                int ja = mapping[a];
+                int jb = mapping[b];
+                if (ja < 0 || jb < 0)
+                    continue;
+
+                int multG = G.getMultiplicity(a, b); // define this appropriately
+                int multH = this->getMultiplicity(ja, jb);
+
+                int total = max(0, multG - multH);
+                if (total > 0)
+                    local_Edgeset[ja][jb] = total;
+            }
+        }
+
+        all_Edgesets.push_back(local_Edgeset);
+    };
+
+    function<void(int)> DFS = [&](int t) -> void
+    {
+        if (t == Gn)
+        {
+            createEdgeset(mapping);
+            // if(all_Edgesets.size()<6){
+            //     for(int i=0;i<Gn;i++){
+            //         cout<<mapping[i]<<" ";
+            //     }
+            //     cout<<endl;
+            // }
+            return;
+        }
+
+        int i = order[t];
+
+        for (int j = 0; j < Hn; ++j)
+        {
+            if(used_H[j])
+                continue;
+
+            mapping[i] = j;
+            used_H[j] = 1;
+
+            DFS(t + 1);
+
+            used_H[j] = 0;
+            mapping[i] = -1;
+        }
+        return;
+    };
+
+    DFS(0);
+
+    // for(int i=0; i<10; i++){
+    //     vector<vector<int>> local_Edgeset = all_Edgesets[i];
+    //     for(int a=0; a<Hn;a++){
+    //         for(int b=0; b<Hn;b++){
+    //             cout<<local_Edgeset[b][a]<<" ";
+    //         }
+    //         cout<<endl;
+    //     }
+    //     cout<<endl;
+    // }
+
+    cout << all_Edgesets.size() << endl;
+    int counter = 0;
+    int bestCost = __INT_MAX__;
+    vector<vector<int>> bestEdgeSet(Hn, vector<int>(Hn, 0));
+    vector<int> usedInSum(N, -1);
+    vector<vector<int>> sum(Hn, vector<int>(Hn, 0));
+    set<int> usedEdgeSets;
+
+    auto AdjMatrixAdd = [&](std::vector<std::vector<int>> &mat1,
+                            const std::vector<std::vector<int>> &mat2)
+    {
+        for (int i = 0; i < Hn; ++i)
+        {
+            for (int j = 0; j < Hn; ++j)
+            {
+                mat1[i][j] = max(mat1[i][j], mat2[i][j]);
+            }
+        }
+    };
+
+    auto EdgeSetCost = [&](const std::vector<std::vector<int>> &mat)
+    {
+        int cost = 0;
+        for (int i = 0; i < Hn; ++i)
+            for (int j = 0; j < Hn; ++j)
+                cost += mat[i][j];
+        return cost;
+    };
+
+    // Recursive DFS over combinations of edge sets
+    function<void(int)> EdgeDfs = [&](int level)
+    {
+        //cout << ++counter << endl;
+        ++counter;
+        // cout<<" HI "<< level << endl;
+        int cost = EdgeSetCost(sum);
+
+        if (level == N)
+        {
+            if (cost < bestCost)
+            {
+                bestCost = cost;
+                bestEdgeSet = sum;
+                cout<<" HI "<< level << endl;
+                cout << counter << endl;
+                for(auto itr=usedEdgeSets.begin(); itr!=usedEdgeSets.end();itr++){
+                    cout<< *itr << " ";
+                }
+                cout<<endl;
+                cout << "Best cost: " << bestCost << endl;
+
+                for (int a = 0; a < Hn; a++)
+                {
+                    for (int b = 0; b < Hn; b++)
+                    {
+                        cout << bestEdgeSet[b][a] << " ";
+                    }
+                    cout << endl;
+                }
+            }
+            return;
+        }
+
+        if (cost > bestCost)
+            return;
+
+        for (int i = 0; i < all_Edgesets.size(); i++)
+        {
+            if (usedEdgeSets.count(i) == 0)
+            {
+                usedEdgeSets.insert(i);
+
+                vector<vector<int>> backup = sum;
+
+                // cout << "Original:" << endl;
+                // for (int a = 0; a < Hn; a++)
+                // {
+                //     for (int b = 0; b < Hn; b++)
+                //     {
+                //         cout << backup[b][a] << " ";
+                //     }
+                //     cout << endl;
+                // }
+
+                // cout << "Addition: " << endl;
+                // for (int a = 0; a < Hn; a++)
+                // {
+                //     for (int b = 0; b < Hn; b++)
+                //     {
+                //         cout << all_Edgesets[i][b][a] << " ";
+                //     }
+                //     cout << endl;
+                // }
+                AdjMatrixAdd(sum, all_Edgesets[i]);
+                // cout << "Result:" << endl;
+                // for (int a = 0; a < Hn; a++)
+                // {
+                //     for (int b = 0; b < Hn; b++)
+                //     {
+                //         cout << sum[b][a] << " ";
+                //     }
+                //     cout << endl;
+                // }
+                EdgeDfs(level + 1);
+
+                sum = backup;
+                usedEdgeSets.erase(i);
+            }
+        }
+    };
+
+    EdgeDfs(0);
+
+    cout << "Best cost: " << bestCost << endl;
+
+    for (int a = 0; a < Hn; a++)
+    {
+        for (int b = 0; b < Hn; b++)
+        {
+            cout << bestEdgeSet[b][a] << " ";
+        }
+        cout << endl;
+    }
+    // return {bestCost, bestEdgeSet};
 }

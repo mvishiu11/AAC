@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
     } else {
         cout << "NO" << endl;
     }
+    G.findMinimalExtension(H, N);
     return 0;
 }
 
