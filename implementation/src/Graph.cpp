@@ -19,8 +19,6 @@ int Graph::getSize()
 
 bool Graph::hasNSubgraphs(Graph &G, int N)
 {
-    // !!! STILL DOESN'T WORK PROPERLY
-
     if (G.getVerticesCount() == 0 || G.getVerticesCount() > this->getVerticesCount())
     {
         return true;
@@ -33,8 +31,6 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     {
         M[i] = (int *)malloc(sizeof(int) * Gn);
     }
-
-    std::cout << "Initializing candidate matrix..." << std::endl;
 
     for (int i = 0; i < Hn; i++)
     {
@@ -50,17 +46,6 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
             }
         }
     }
-
-    for (int i = 0; i < Hn; i++)
-    {
-        for (int j = 0; j < Gn; j++)
-        {
-            std::cout << M[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-
-    std::cout << "Refining candidate matrix..." << std::endl;
     // Iterative neighbourhood refinement (prune until fixpoint)
     bool changed = true;
     while (changed)
@@ -149,18 +134,10 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
             return false;
     }
 
-    for (int i = 0; i < Hn; i++)
-    {
-        for (int j = 0; j < Gn; j++)
-        {
-            std::cout << M[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-
     int *order = G.getVerticesByDegree();
     int *used_H = new int[Hn]();
-    std::vector<int> mapping(Gn, -1);
+    int *mapping = (int*)malloc(sizeof(int)*Gn);
+    std::fill(mapping, mapping+Gn, -1); 
     int count = 0;
 
     std::function<bool(int)> DFS = [&](int t) -> bool
@@ -253,7 +230,6 @@ int *Graph::getVerticesByDegree()
     for (int i = 0; i < nodes; i++)
     {
         sortedVertices[i] = vertexDegrees[i].second;
-        std::cout << "Vertex: " << sortedVertices[i] << " Degree: " << vertexDegrees[i].first << std::endl;
     }
 
     return sortedVertices;

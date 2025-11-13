@@ -17,7 +17,6 @@ int main(int argc, char** argv) {
     auto graphs = parseInput(filename, &N);
     Graph H = graphs[0];
     Graph G = graphs[1];
-    cout<< N << endl;
     if(G.hasNSubgraphs(H, N)) {
         cout << "YES" << endl;
     } else {
