@@ -15,8 +15,7 @@ public:
     Graph(int nodes, int** edges): nodes(nodes), edges(edges) {}
     int getSize();
     int getVerticesCount() { return nodes; }
-    int getOutDegree(int v, int w) { return edges[v][w]; }
-    int getInDegree(int v, int w) { return edges[w][v]; }
+    int getMultiplicity(int v, int w) { return edges[v][w]; }
     int getOutDegree(int v) { 
         int outDegree = 0;
         for(int i = 0; i < nodes; i++) {
