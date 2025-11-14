@@ -16,13 +16,13 @@ public:
     Graph(int nodes, int **edges) : nodes(nodes), edges(edges) {}
     int getSize();
     int getVerticesCount() { return nodes; }
-    int getMultiplicity(int v, int w) { return edges[v][w]; }
+    int getMultiplicity(int v, int w) { return edges[w][v]; }
     int getOutDegree(int v)
     {
         int outDegree = 0;
         for (int i = 0; i < nodes; i++)
         {
-            outDegree += edges[v][i];
+            outDegree += edges[i][v];
         }
         return outDegree;
     }
@@ -31,7 +31,7 @@ public:
         int inDegree = 0;
         for (int i = 0; i < nodes; i++)
         {
-            inDegree += edges[i][v];
+            inDegree += edges[v][i];
         }
         return inDegree;
     }

@@ -41,6 +41,9 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     {
         for (int j = 0; j < Gn; j++)
         {
+            cout << "i=" << i << " (out=" << H.getOutDegree(i) << ", in=" << H.getInDegree(i)
+          << "), j=" << j << " (out=" << G.getOutDegree(j) << ", in=" << G.getInDegree(j) << ")\n";
+
             if (H.getOutDegree(i) >= G.getOutDegree(j) && H.getInDegree(i) >= G.getInDegree(j))
             {
                 M[i][j] = 1;
@@ -50,6 +53,12 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                 M[i][j] = 0;
             }
         }
+    }
+        for(int i = 0; i<Hn; i++){
+        for(int j=0; j<Gn; j++){
+            cout<<M[i][j]<<" ";
+        }
+        cout<<endl;
     }
     // Iterative neighbourhood refinement (prune until fixpoint)
     bool changed = true;
@@ -145,6 +154,14 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     fill(mapping, mapping + Gn, -1);
     int count = 0;
 
+    cout<<endl;
+    for(int i = 0; i<Hn; i++){
+        for(int j=0; j<Gn; j++){
+            cout<<M[i][j]<<" ";
+        }
+        cout<<endl;
+    }
+
     function<bool(int)> DFS = [&](int t) -> bool
     {
         if (count >= N)
@@ -159,6 +176,9 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                 cout << mapping[i] << " ";
             }
             cout << endl;
+            if (count >= N)
+                return true;
+
             return false;
         }
 
@@ -170,6 +190,11 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
             {
                 // check partial consistency
                 bool consistent = true;
+
+                //check for self loops
+                if (G.getMultiplicity(i, i) > H.getMultiplicity(j, j))
+                    consistent = false;
+
                 for (int k = 0; k < t; ++k)
                 {
                     int i2 = order[k];
@@ -269,7 +294,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
                 int total = max(0, multG - multH);
                 if (total > 0)
-                    local_Edgeset[jb][ja] = total; // for some reaon this should be flipped, idk rly why
+                    local_Edgeset[ja][jb] = total; // for some reaon this should be flipped, idk rly why
             }
         }
 
@@ -290,7 +315,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
         {
             if (usedH[j])
                 continue;
-            
+
             mapping[i] = j;
             usedH[j] = 1;
 
