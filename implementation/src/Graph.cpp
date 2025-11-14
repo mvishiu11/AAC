@@ -281,14 +281,6 @@ void Graph::findMinimalExtension(Graph &G, int N)
         if (t == Gn)
         {
             createEdgeset(mapping);
-            // if (all_Edgesets.size() < 6)
-            // {
-            //     for (int i = 0; i < Gn; i++)
-            //     {
-            //         cout << mapping[i] << " ";
-            //     }
-            //     cout << endl;
-            // }
             return;
         }
 
@@ -311,22 +303,6 @@ void Graph::findMinimalExtension(Graph &G, int N)
     };
 
     DFS(0);
-
-    // for (int i = 0; i < 10; i++)
-    // {
-    //     vector<vector<int>> local_Edgeset = all_Edgesets[i];
-    //     for (int a = 0; a < Hn; a++)
-    //     {
-    //         for (int b = 0; b < Hn; b++)
-    //         {
-    //             cout << local_Edgeset[b][a] << " ";
-    //         }
-    //         cout << endl;
-    //     }
-    //     cout << endl;
-    // }
-
-    //cout << all_Edgesets.size() << endl;
 
     int counter = 0;
     int bestCost = __INT_MAX__;
@@ -359,9 +335,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
     // Recursive DFS over combinations of edge sets
     function<void(int)> EdgeDfs = [&](int level)
     {
-        // cout << ++counter << endl;
         ++counter;
-        // cout<<" HI "<< level << endl;
         int cost = EdgeSetCost(sum);
 
         if (level == N)
@@ -370,23 +344,6 @@ void Graph::findMinimalExtension(Graph &G, int N)
             {
                 bestCost = cost;
                 bestEdgeSet = sum;
-                // cout << " HI " << level << endl;
-                // cout << counter << endl;
-                // for (auto itr = usedEdgeSets.begin(); itr != usedEdgeSets.end(); itr++)
-                // {
-                //     cout << *itr << " ";
-                // }
-                // cout << endl;
-                // cout << "Best cost: " << bestCost << endl;
-
-                // for (int a = 0; a < Hn; a++)
-                // {
-                //     for (int b = 0; b < Hn; b++)
-                //     {
-                //         cout << bestEdgeSet[b][a] << " ";
-                //     }
-                //     cout << endl;
-                // }
             }
             return;
         }
