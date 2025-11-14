@@ -23,11 +23,12 @@ int Graph::getSize()
 
 bool Graph::hasNSubgraphs(Graph &G, int N)
 {
-    if (G.getVerticesCount() == 0 || G.getVerticesCount() > this->getVerticesCount())
+    Graph H = *this;
+    if (G.getVerticesCount() == 0 || G.getVerticesCount() > H.getVerticesCount())
     {
         return true;
     }
-    int Hn = this->getVerticesCount();
+    int Hn = H.getVerticesCount();
     int Gn = G.getVerticesCount();
 
     int **M = (int **)malloc(sizeof(int *) * Hn);
@@ -40,7 +41,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     {
         for (int j = 0; j < Gn; j++)
         {
-            if (this->getOutDegree(i) >= G.getOutDegree(j) && this->getInDegree(i) >= G.getInDegree(j))
+            if (H.getOutDegree(i) >= G.getOutDegree(j) && H.getInDegree(i) >= G.getInDegree(j))
             {
                 M[i][j] = 1;
             }
@@ -73,7 +74,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                     bool found = false;
                     for (int v = 0; v < Hn; ++v)
                     {
-                        int mult_host = this->getMultiplicity(i, v); // multiplicity of (i->v) in H
+                        int mult_host = H.getMultiplicity(i, v); // multiplicity of (i->v) in H
                         if (mult_host >= mult_pattern && M[v][u] == 1)
                         {
                             found = true;
@@ -105,7 +106,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                     bool found = false;
                     for (int v = 0; v < Hn; ++v)
                     {
-                        int mult_host = this->getMultiplicity(v, i); // multiplicity of (v->i) in H
+                        int mult_host = H.getMultiplicity(v, i); // multiplicity of (v->i) in H
                         if (mult_host >= mult_pattern && M[v][u] == 1)
                         {
                             found = true;
@@ -139,7 +140,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     }
 
     int *order = G.getVerticesByDegree();
-    int *used_H = new int[Hn]();
+    int *usedH = new int[Hn]();
     int *mapping = (int *)malloc(sizeof(int) * Gn);
     fill(mapping, mapping + Gn, -1);
     int count = 0;
@@ -165,7 +166,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
 
         for (int j = 0; j < Hn; ++j)
         {
-            if (M[j][i] == 1 && !used_H[j])
+            if (M[j][i] == 1 && !usedH[j])
             {
                 // check partial consistency
                 bool consistent = true;
@@ -176,9 +177,9 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                         continue;
 
                     // edge consistency
-                    if (G.getMultiplicity(i2, i) > this->getMultiplicity(mapping[i2], j))
+                    if (G.getMultiplicity(i2, i) > H.getMultiplicity(mapping[i2], j))
                         consistent = false;
-                    if (G.getMultiplicity(i, i2) > this->getMultiplicity(j, mapping[i2]))
+                    if (G.getMultiplicity(i, i2) > H.getMultiplicity(j, mapping[i2]))
                         consistent = false;
 
                     if (!consistent)
@@ -189,12 +190,12 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                     continue;
 
                 mapping[i] = j;
-                used_H[j] = 1;
+                usedH[j] = 1;
 
                 if (DFS(t + 1))
                     return true;
 
-                used_H[j] = 0;
+                usedH[j] = 0;
                 mapping[i] = -1;
             }
         }
@@ -241,13 +242,13 @@ int *Graph::getVerticesByDegree()
 
 void Graph::findMinimalExtension(Graph &G, int N)
 {
-    // Graph *H = this;
+    Graph H = *this;
 
-    int Hn = this->getVerticesCount();
+    int Hn = H.getVerticesCount();
     int Gn = G.getVerticesCount();
 
     int *order = G.getVerticesByDegree();
-    int *used_H = new int[Hn]();
+    int *usedH = new int[Hn]();
     vector<int> mapping(Gn, -1);
     vector<vector<vector<int>>> all_Edgesets;
 
@@ -263,12 +264,12 @@ void Graph::findMinimalExtension(Graph &G, int N)
                 if (ja < 0 || jb < 0)
                     continue;
 
-                int multG = G.getMultiplicity(a, b); // define this appropriately
-                int multH = this->getMultiplicity(ja, jb);
+                int multG = G.getMultiplicity(a, b);
+                int multH = H.getMultiplicity(ja, jb);
 
                 int total = max(0, multG - multH);
                 if (total > 0)
-                    local_Edgeset[ja][jb] = total;
+                    local_Edgeset[jb][ja] = total; // for some reaon this should be flipped, idk rly why
             }
         }
 
@@ -280,11 +281,13 @@ void Graph::findMinimalExtension(Graph &G, int N)
         if (t == Gn)
         {
             createEdgeset(mapping);
-            // if(all_Edgesets.size()<6){
-            //     for(int i=0;i<Gn;i++){
-            //         cout<<mapping[i]<<" ";
+            // if (all_Edgesets.size() < 6)
+            // {
+            //     for (int i = 0; i < Gn; i++)
+            //     {
+            //         cout << mapping[i] << " ";
             //     }
-            //     cout<<endl;
+            //     cout << endl;
             // }
             return;
         }
@@ -293,15 +296,15 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
         for (int j = 0; j < Hn; ++j)
         {
-            if(used_H[j])
+            if (usedH[j])
                 continue;
-
+            
             mapping[i] = j;
-            used_H[j] = 1;
+            usedH[j] = 1;
 
             DFS(t + 1);
 
-            used_H[j] = 0;
+            usedH[j] = 0;
             mapping[i] = -1;
         }
         return;
@@ -309,18 +312,22 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
     DFS(0);
 
-    // for(int i=0; i<10; i++){
+    // for (int i = 0; i < 10; i++)
+    // {
     //     vector<vector<int>> local_Edgeset = all_Edgesets[i];
-    //     for(int a=0; a<Hn;a++){
-    //         for(int b=0; b<Hn;b++){
-    //             cout<<local_Edgeset[b][a]<<" ";
+    //     for (int a = 0; a < Hn; a++)
+    //     {
+    //         for (int b = 0; b < Hn; b++)
+    //         {
+    //             cout << local_Edgeset[b][a] << " ";
     //         }
-    //         cout<<endl;
+    //         cout << endl;
     //     }
-    //     cout<<endl;
+    //     cout << endl;
     // }
 
-    cout << all_Edgesets.size() << endl;
+    //cout << all_Edgesets.size() << endl;
+
     int counter = 0;
     int bestCost = __INT_MAX__;
     vector<vector<int>> bestEdgeSet(Hn, vector<int>(Hn, 0));
@@ -352,7 +359,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
     // Recursive DFS over combinations of edge sets
     function<void(int)> EdgeDfs = [&](int level)
     {
-        //cout << ++counter << endl;
+        // cout << ++counter << endl;
         ++counter;
         // cout<<" HI "<< level << endl;
         int cost = EdgeSetCost(sum);
@@ -363,22 +370,23 @@ void Graph::findMinimalExtension(Graph &G, int N)
             {
                 bestCost = cost;
                 bestEdgeSet = sum;
-                cout<<" HI "<< level << endl;
-                cout << counter << endl;
-                for(auto itr=usedEdgeSets.begin(); itr!=usedEdgeSets.end();itr++){
-                    cout<< *itr << " ";
-                }
-                cout<<endl;
-                cout << "Best cost: " << bestCost << endl;
+                // cout << " HI " << level << endl;
+                // cout << counter << endl;
+                // for (auto itr = usedEdgeSets.begin(); itr != usedEdgeSets.end(); itr++)
+                // {
+                //     cout << *itr << " ";
+                // }
+                // cout << endl;
+                // cout << "Best cost: " << bestCost << endl;
 
-                for (int a = 0; a < Hn; a++)
-                {
-                    for (int b = 0; b < Hn; b++)
-                    {
-                        cout << bestEdgeSet[b][a] << " ";
-                    }
-                    cout << endl;
-                }
+                // for (int a = 0; a < Hn; a++)
+                // {
+                //     for (int b = 0; b < Hn; b++)
+                //     {
+                //         cout << bestEdgeSet[b][a] << " ";
+                //     }
+                //     cout << endl;
+                // }
             }
             return;
         }
@@ -393,36 +401,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
                 usedEdgeSets.insert(i);
 
                 vector<vector<int>> backup = sum;
-
-                // cout << "Original:" << endl;
-                // for (int a = 0; a < Hn; a++)
-                // {
-                //     for (int b = 0; b < Hn; b++)
-                //     {
-                //         cout << backup[b][a] << " ";
-                //     }
-                //     cout << endl;
-                // }
-
-                // cout << "Addition: " << endl;
-                // for (int a = 0; a < Hn; a++)
-                // {
-                //     for (int b = 0; b < Hn; b++)
-                //     {
-                //         cout << all_Edgesets[i][b][a] << " ";
-                //     }
-                //     cout << endl;
-                // }
                 AdjMatrixAdd(sum, all_Edgesets[i]);
-                // cout << "Result:" << endl;
-                // for (int a = 0; a < Hn; a++)
-                // {
-                //     for (int b = 0; b < Hn; b++)
-                //     {
-                //         cout << sum[b][a] << " ";
-                //     }
-                //     cout << endl;
-                // }
                 EdgeDfs(level + 1);
 
                 sum = backup;
