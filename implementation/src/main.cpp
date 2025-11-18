@@ -25,6 +25,11 @@ int main(int argc, char** argv) {
     } else {
         cout << "NO" << endl;
     }
+    if(G.hasNSubgraphsApprox(H, N)) {
+        cout << "YES APPROX" << endl;
+    } else {
+        cout << "NO APPROX" << endl;
+    }
     G.findMinimalExtension(H, N);
     return 0;
 }

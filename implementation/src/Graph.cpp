@@ -2,10 +2,14 @@
 #include <functional>
 #include "Graph.hpp"
 #include <set>
+extern "C" {
+#include "../fastmurty/da.h"
+}
+#include <memory>
 
 using namespace std;
 
-int Graph::getSize()
+int Graph::getSize() const
 {
     int size = 0;
     for (int i = 0; i < nodes; i++)
@@ -239,6 +243,100 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
 
 bool Graph::hasNSubgraphsApprox(Graph &G, int N)
 {
+    // Host graph is "this"; pattern graph is G
+    Graph H = *this;
+
+    const int m = G.getVerticesCount(); // rows (pattern vertices)
+    const int n = H.getVerticesCount(); // cols (host vertices)
+    if (m == 0)
+        return true;
+    if (n == 0 || m > n)
+        return false;
+
+    // 1) Build cost matrix using degree differences
+    std::vector<std::vector<int>> costMatrixInt = G.computeVertexMappingCostMatrix(H);
+    std::vector<double> costMatrix(m * n, 0.0);
+    for (int u = 0; u < m; ++u)
+        for (int v = 0; v < n; ++v)
+            costMatrix[u * n + v] = static_cast<double>(costMatrixInt[u][v]);
+
+    // 2) Prepare priors (single prior that includes all rows/cols)
+    const int numRowPriors = 1;
+    const int numColPriors = 1;
+    std::unique_ptr<bool[]> rowPriors(new bool[numRowPriors * m]);
+    std::fill(rowPriors.get(), rowPriors.get() + (numRowPriors * m), true);
+    std::vector<double> rowPriorWeights(numRowPriors, 0.0);
+    std::unique_ptr<bool[]> colPriors(new bool[numColPriors * n]);
+    std::fill(colPriors.get(), colPriors.get() + (numColPriors * n), true);
+    std::vector<double> colPriorWeights(numColPriors, 0.0);
+
+    // 3) Run Murty (K-best) via fastmurty
+    const int K = 90;
+    std::vector<int> outAssocs(K * (m + n) * 2, -2);
+    std::vector<double> outCosts(K, 0.0);
+
+    WorkvarsforDA work = allocateWorkvarsforDA(m, n, K);
+    int ret = da(
+        costMatrix.data(),
+        numRowPriors, rowPriors.get(), rowPriorWeights.data(),
+        numColPriors, colPriors.get(), colPriorWeights.data(),
+        K, outAssocs.data(), outCosts.data(), &work);
+
+    for(int i = 0; i<K*(m+n)*2; i++){
+        cout<<"Association "<<i<<": "<<outAssocs[i]<<endl;
+    }
+
+    if(ret!=0) {
+        cout<<"Error: "<<ret<<endl;
+        return false;// ret==0 success, non-zero means fewer than K associations
+    }
+
+    
+    int total = 0;
+    // 4) Convert each association to a mapping φ and check
+    for (int k = 0; k < K; ++k)
+    {
+        std::vector<int> mapping(m, -1);
+
+        int base = k * (m + n) * 2;
+        for (int z = 0; z < (m + n); ++z)
+        {
+            int a = outAssocs[base + 2 * z + 0];
+            int b = outAssocs[base + 2 * z + 1];
+            if (a >= 0 && a < m && b >= 0 && b < n)
+            {
+                mapping[a] = b;
+            }
+        }
+
+        for(int i = 0; i<m; i++){
+            cout<<"Mapping["<<i<<"]: "<<mapping[i]<<endl;
+        }
+
+        // // Enforce injectivity (no two pattern vertices map to the same host vertex)
+        std::vector<int> used(n, 0);
+        bool injective = true;
+        for (int u = 0; u < m; ++u)
+        {
+            if (mapping[u] < 0) { injective = false; break; }
+            if (used[mapping[u]]) { injective = false; break; }
+            used[mapping[u]] = 1;
+        }
+        if (!injective)
+            continue;
+
+        if (G.detectIsomorphism(H, mapping))
+        {
+            total += 1;
+            if (total >= N)
+            {
+                deallocateWorkvarsforDA(work);
+                return true;
+            }
+        }
+    }
+
+    deallocateWorkvarsforDA(work);
     return false;
 }
 
@@ -410,4 +508,54 @@ void Graph::findMinimalExtension(Graph &G, int N)
         cout << endl;
     }
     // return {bestCost, bestEdgeSet};
+}
+
+bool Graph::detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping)
+{
+    // Size check: vertexMapping must map all vertices of this graph (G) into hostGraph
+    if ((int)vertexMapping.size() != nodes)
+        return false;
+    if (hostGraph.getVerticesCount() <= 0)
+        return false;
+
+    const int hostVertexCount = hostGraph.getVerticesCount();
+
+    // For all directed edges (u,v) in G, ensure mult_G(u,v) <= mult_H(phi(u), phi(v))
+    for (int u = 0; u < nodes; ++u)
+    {
+        const int mappedU = vertexMapping[u];
+        if (mappedU < 0 || mappedU >= hostVertexCount)
+            return false;
+        for (int v = 0; v < nodes; ++v)
+        {
+            int multG = getMultiplicity(u, v);
+            if (multG <= 0)
+                continue;
+            const int mappedV = vertexMapping[v];
+            if (mappedV < 0 || mappedV >= hostVertexCount)
+                return false;
+            int multH = hostGraph.getMultiplicity(mappedU, mappedV);
+            if (multG > multH)
+                return false;
+        }
+    }
+    return true;
+}
+
+std::vector<std::vector<int>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph) const
+{
+    const int patternVertexCount = getVerticesCount();
+    const int hostVertexCount = hostGraph.getVerticesCount();
+    std::vector<std::vector<int>> cost(patternVertexCount, std::vector<int>(hostVertexCount, 0));
+    for (int u = 0; u < patternVertexCount; ++u)
+    {
+        const int degreeG = getOutDegree(u) + getInDegree(u);
+        for (int v = 0; v < hostVertexCount; ++v)
+        {
+            const int degreeH = hostGraph.getOutDegree(v) + hostGraph.getInDegree(v);
+            cost[u][v] = max(0, degreeG - degreeH);
+            cout<<"Cost["<<u<<"]["<<v<<"]: "<<cost[u][v]<<endl;
+        }
+    }
+    return cost;
 }
