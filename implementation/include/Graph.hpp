@@ -36,6 +36,7 @@ public:
         return inDegree;
     }
     bool hasNSubgraphs(Graph &G, int N = 1);
+    bool hasNSubgraphsApprox(Graph &G, int N = 1);
     int *getVerticesByDegree();
     void findMinimalExtension(Graph &G, int N = 1);
 };

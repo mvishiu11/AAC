@@ -237,6 +237,11 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     return result;
 }
 
+bool Graph::hasNSubgraphsApprox(Graph &G, int N)
+{
+    return false;
+}
+
 int *Graph::getVerticesByDegree()
 {
     // Step 1: Compute degrees of all vertices

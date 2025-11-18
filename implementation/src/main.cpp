@@ -4,6 +4,9 @@
 #include <sstream>
 #include <tuple>
 #include "../include/Graph.hpp"
+extern "C" {
+    #include "../fastmurty/da.h"
+}
 
 using namespace std;
 
