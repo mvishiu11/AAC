@@ -2,7 +2,8 @@
 #include <functional>
 #include "Graph.hpp"
 #include <set>
-extern "C" {
+extern "C"
+{
 #include "../fastmurty/da.h"
 }
 #include <memory>
@@ -45,8 +46,6 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     {
         for (int j = 0; j < Gn; j++)
         {
-            cout << "i=" << i << " (out=" << H.getOutDegree(i) << ", in=" << H.getInDegree(i)
-          << "), j=" << j << " (out=" << G.getOutDegree(j) << ", in=" << G.getInDegree(j) << ")\n";
 
             if (H.getOutDegree(i) >= G.getOutDegree(j) && H.getInDegree(i) >= G.getInDegree(j))
             {
@@ -57,12 +56,6 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                 M[i][j] = 0;
             }
         }
-    }
-        for(int i = 0; i<Hn; i++){
-        for(int j=0; j<Gn; j++){
-            cout<<M[i][j]<<" ";
-        }
-        cout<<endl;
     }
     // Iterative neighbourhood refinement (prune until fixpoint)
     bool changed = true;
@@ -158,14 +151,6 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     fill(mapping, mapping + Gn, -1);
     int count = 0;
 
-    cout<<endl;
-    for(int i = 0; i<Hn; i++){
-        for(int j=0; j<Gn; j++){
-            cout<<M[i][j]<<" ";
-        }
-        cout<<endl;
-    }
-
     function<bool(int)> DFS = [&](int t) -> bool
     {
         if (count >= N)
@@ -195,7 +180,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
                 // check partial consistency
                 bool consistent = true;
 
-                //check for self loops
+                // check for self loops
                 if (G.getMultiplicity(i, i) > H.getMultiplicity(j, j))
                     consistent = false;
 
@@ -243,6 +228,8 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
 
 bool Graph::hasNSubgraphsApprox(Graph &G, int N)
 {
+    // K should be an argument
+
     // Host graph is "this"; pattern graph is G
     Graph H = *this;
 
@@ -253,73 +240,31 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int N)
     if (n == 0 || m > n)
         return false;
 
-    // 1) Build cost matrix using degree differences
-    std::vector<std::vector<int>> costMatrixInt = G.computeVertexMappingCostMatrix(H);
-    std::vector<double> costMatrix(m * n, 0.0);
-    for (int u = 0; u < m; ++u)
-        for (int v = 0; v < n; ++v)
-            costMatrix[u * n + v] = static_cast<double>(costMatrixInt[u][v]);
-
-    // 2) Prepare priors (single prior that includes all rows/cols)
-    const int numRowPriors = 1;
-    const int numColPriors = 1;
-    std::unique_ptr<bool[]> rowPriors(new bool[numRowPriors * m]);
-    std::fill(rowPriors.get(), rowPriors.get() + (numRowPriors * m), true);
-    std::vector<double> rowPriorWeights(numRowPriors, 0.0);
-    std::unique_ptr<bool[]> colPriors(new bool[numColPriors * n]);
-    std::fill(colPriors.get(), colPriors.get() + (numColPriors * n), true);
-    std::vector<double> colPriorWeights(numColPriors, 0.0);
-
-    // 3) Run Murty (K-best) via fastmurty
-    const int K = 90;
-    std::vector<int> outAssocs(K * (m + n) * 2, -2);
-    std::vector<double> outCosts(K, 0.0);
-
-    WorkvarsforDA work = allocateWorkvarsforDA(m, n, K);
-    int ret = da(
-        costMatrix.data(),
-        numRowPriors, rowPriors.get(), rowPriorWeights.data(),
-        numColPriors, colPriors.get(), colPriorWeights.data(),
-        K, outAssocs.data(), outCosts.data(), &work);
-
-    for(int i = 0; i<K*(m+n)*2; i++){
-        cout<<"Association "<<i<<": "<<outAssocs[i]<<endl;
-    }
-
-    if(ret!=0) {
-        cout<<"Error: "<<ret<<endl;
-        return false;// ret==0 success, non-zero means fewer than K associations
-    }
-
-    
+    const int K = H.getSize() * G.getSize(); // should be an argument
     int total = 0;
     // 4) Convert each association to a mapping φ and check
+
+    vector<vector<int>> mappings = H.selectMappings(G, K);
+
     for (int k = 0; k < K; ++k)
     {
-        std::vector<int> mapping(m, -1);
+        vector<int> mapping = mappings[k];
 
-        int base = k * (m + n) * 2;
-        for (int z = 0; z < (m + n); ++z)
-        {
-            int a = outAssocs[base + 2 * z + 0];
-            int b = outAssocs[base + 2 * z + 1];
-            if (a >= 0 && a < m && b >= 0 && b < n)
-            {
-                mapping[a] = b;
-            }
-        }
-
-        for(int i = 0; i<m; i++){
-            cout<<"Mapping["<<i<<"]: "<<mapping[i]<<endl;
-        }
-
-        // // Enforce injectivity (no two pattern vertices map to the same host vertex)
-        std::vector<int> used(n, 0);
+        // Enforce injectivity (no two pattern vertices map to the same host vertex)
+        vector<int> used(n, 0);
         bool injective = true;
         for (int u = 0; u < m; ++u)
         {
-            if (mapping[u] < 0) { injective = false; break; }
-            if (used[mapping[u]]) { injective = false; break; }
+            if (mapping[u] < 0)
+            {
+                injective = false;
+                break;
+            }
+            if (used[mapping[u]])
+            {
+                injective = false;
+                break;
+            }
             used[mapping[u]] = 1;
         }
         if (!injective)
@@ -330,13 +275,11 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int N)
             total += 1;
             if (total >= N)
             {
-                deallocateWorkvarsforDA(work);
                 return true;
             }
         }
     }
 
-    deallocateWorkvarsforDA(work);
     return false;
 }
 
@@ -439,8 +382,8 @@ void Graph::findMinimalExtension(Graph &G, int N)
     vector<vector<int>> sum(Hn, vector<int>(Hn, 0));
     set<int> usedEdgeSets;
 
-    auto AdjMatrixAdd = [&](std::vector<std::vector<int>> &mat1,
-                            const std::vector<std::vector<int>> &mat2)
+    auto AdjMatrixAdd = [&](vector<vector<int>> &mat1,
+                            const vector<vector<int>> &mat2)
     {
         for (int i = 0; i < Hn; ++i)
         {
@@ -451,7 +394,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
         }
     };
 
-    auto EdgeSetCost = [&](const std::vector<std::vector<int>> &mat)
+    auto EdgeSetCost = [&](const vector<vector<int>> &mat)
     {
         int cost = 0;
         for (int i = 0; i < Hn; ++i)
@@ -510,7 +453,74 @@ void Graph::findMinimalExtension(Graph &G, int N)
     // return {bestCost, bestEdgeSet};
 }
 
-bool Graph::detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping)
+void Graph::findMinimalExtensionApprox(Graph &G, int N)
+{
+
+    Graph H = *this;
+
+    int Hn = H.getVerticesCount();
+    int Gn = G.getVerticesCount();
+
+    int K = H.getSize() * G.getSize()*N;
+    vector<vector<int>> mappings = H.selectMappings(G, K);
+    vector<vector<int>> all_Edgesets(Hn, vector<int>(Hn, 0));
+
+    auto AdjMatrixAdd = [&](vector<vector<int>> &mat1,
+                            const vector<vector<int>> &mat2)
+    {
+        int Rn = mat2.size();
+
+        for (int i = 0; i < Rn; ++i)
+        {
+            for (int j = 0; j < Rn; ++j)
+            {
+                mat1[i][j] = max(mat1[i][j], mat2[i][j]);
+            }
+        }
+    };
+
+    int count = 0;
+
+    for (int k = 0; k < K; k++)
+    {
+        vector<int> mapping = mappings[k];
+        bool injective = true;
+        for (int u = 0; u < Hn; ++u)
+        {
+            if (mapping[u] < 0)
+            {
+                injective = false;
+                break;
+            }
+        }
+        if (!injective)
+            continue;
+
+        if (G.detectIsomorphism(H, mapping))
+            continue;
+
+        vector<vector<int>> current_edgeset = H.constructEdgeSet(G, mapping);
+        AdjMatrixAdd(all_Edgesets, current_edgeset);
+        count++;
+        if (count == N)
+        {
+            break;
+        }
+    }
+
+    cout << "Approx extension: " << endl;
+
+    for (int a = 0; a < Hn; a++)
+    {
+        for (int b = 0; b < Hn; b++)
+        {
+            cout << all_Edgesets[b][a] << " ";
+        }
+        cout << endl;
+    }
+}
+
+bool Graph::detectIsomorphism(Graph &hostGraph, const vector<int> &vertexMapping)
 {
     // Size check: vertexMapping must map all vertices of this graph (G) into hostGraph
     if ((int)vertexMapping.size() != nodes)
@@ -542,11 +552,11 @@ bool Graph::detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMa
     return true;
 }
 
-std::vector<std::vector<int>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph) const
+vector<vector<int>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph) const
 {
     const int patternVertexCount = getVerticesCount();
     const int hostVertexCount = hostGraph.getVerticesCount();
-    std::vector<std::vector<int>> cost(patternVertexCount, std::vector<int>(hostVertexCount, 0));
+    vector<vector<int>> cost(patternVertexCount, vector<int>(hostVertexCount, 0));
     for (int u = 0; u < patternVertexCount; ++u)
     {
         const int degreeG = getOutDegree(u) + getInDegree(u);
@@ -554,8 +564,126 @@ std::vector<std::vector<int>> Graph::computeVertexMappingCostMatrix(const Graph 
         {
             const int degreeH = hostGraph.getOutDegree(v) + hostGraph.getInDegree(v);
             cost[u][v] = max(0, degreeG - degreeH);
-            cout<<"Cost["<<u<<"]["<<v<<"]: "<<cost[u][v]<<endl;
+            // cout << "Cost[" << u << "][" << v << "]: " << cost[u][v] << endl;
         }
     }
     return cost;
+}
+
+vector<vector<int>> Graph::selectMappings(const Graph &G, const int K) const
+{
+    Graph H = *this;
+
+    const int m = G.getVerticesCount(); // rows (pattern vertices)
+    const int n = H.getVerticesCount(); // cols (host vertices)
+    if (m == 0)
+        return vector<vector<int>>();
+    if (n == 0 || m > n)
+        return vector<vector<int>>();
+
+    // 1) Build cost matrix using degree differences
+    vector<vector<int>> costMatrixInt = G.computeVertexMappingCostMatrix(H);
+    vector<double> costMatrix(m * n, 0.0);
+    for (int u = 0; u < m; ++u)
+        for (int v = 0; v < n; ++v)
+            costMatrix[u * n + v] = static_cast<double>(costMatrixInt[u][v]);
+
+    // 2) Prepare priors (single prior that includes all rows/cols)
+    const int numRowPriors = 1;
+    const int numColPriors = 1;
+    unique_ptr<bool[]> rowPriors(new bool[numRowPriors * m]);
+    fill(rowPriors.get(), rowPriors.get() + (numRowPriors * m), true);
+    vector<double> rowPriorWeights(numRowPriors, 0.0);
+    unique_ptr<bool[]> colPriors(new bool[numColPriors * n]);
+    fill(colPriors.get(), colPriors.get() + (numColPriors * n), true);
+    vector<double> colPriorWeights(numColPriors, 0.0);
+
+    // 3) Run Murty (K-best) via fastmurty
+    vector<int> outAssocs(K * (m + n) * 2, -2);
+    vector<double> outCosts(K, 0.0);
+
+    WorkvarsforDA work = allocateWorkvarsforDA(m, n, K);
+    int ret = da(
+        costMatrix.data(),
+        numRowPriors, rowPriors.get(), rowPriorWeights.data(),
+        numColPriors, colPriors.get(), colPriorWeights.data(),
+        K, outAssocs.data(), outCosts.data(), &work);
+
+    // for(int i = 0; i<K*(m+n)*2; i++){
+    //     cout<<"Association "<<i<<": "<<outAssocs[i]<<endl;
+    // }
+
+    // if(ret!=0) {
+    //     cout<<"Error: "<<ret<<endl;
+    //     return false;// ret==0 success, non-zero means fewer than K associations
+    // }
+    vector<pair<vector<int>, double>> idx(K);
+    for (int i = 0; i < K; i++)
+    {
+
+        int base = i * (m + n) * 2;
+        vector<int> local;
+        for (int z = 0; z < (m + n)*2; ++z)
+        {
+            local.push_back(outAssocs[base+z]);
+        }
+        idx[i] = {local, outCosts[i]};
+    }
+
+    sort(idx.begin(), idx.end(),
+          [](const auto &a, const auto &b) {
+              return a.second < b.second;   // sort by outCost
+          });
+
+    vector<vector<int>> mappings(K, vector<int>(m, -1));
+    for (int k = 0; k < K; ++k)
+    {
+        for (int z = 0; z < (m + n); ++z)
+        {
+            int a = idx[k].first[2*z+0];
+            int b = idx[k].first[2*z+1];
+            if (a >= 0 && a < m && b >= 0 && b < n)
+            {
+                mappings[k][a] = b;
+            }
+        }
+        for (int i = 0; i < m; i++)
+        {
+            // cout<<"Mapping["<<k<<"]["<<i<<"]: "<<mappings[k][i]<<endl;
+        }
+    }
+
+    deallocateWorkvarsforDA(work);
+    return mappings;
+}
+
+vector<vector<int>> Graph::constructEdgeSet(const Graph &G, vector<int> mapping) const
+{
+
+    Graph H = *this;
+
+    int Hn = H.getVerticesCount();
+    int Gn = G.getVerticesCount();
+
+    vector<vector<int>> edgeset(Hn, vector<int>(Hn, 0));
+
+    for (int a = 0; a < Gn; ++a)
+    {
+        for (int b = 0; b < Gn; ++b)
+        {
+            int ja = mapping[a];
+            int jb = mapping[b];
+            if (ja < 0 || jb < 0)
+                continue;
+
+            int multG = G.getMultiplicity(a, b);
+            int multH = H.getMultiplicity(ja, jb);
+
+            int total = max(0, multG - multH);
+            if (total > 0)
+                edgeset[ja][jb] = total; // for some reaon this should be flipped, idk rly why
+        }
+    }
+
+    return edgeset;
 }

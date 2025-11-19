@@ -13,6 +13,10 @@ private:
     int nodes;
     bool detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping);
     std::vector<std::vector<int>> computeVertexMappingCostMatrix(const Graph &hostGraph) const;
+    std::vector<std::vector<int>> selectMappings(const Graph &G, const int K) const;
+    std::vector<std::vector<int>> constructEdgeSet(const Graph &G, std::vector<int> mapping) const;
+    int *getVerticesByDegree();
+
 public:
     Graph(int nodes, int **edges) : nodes(nodes), edges(edges) {}
     int getSize() const;
@@ -38,7 +42,7 @@ public:
     }
     bool hasNSubgraphs(Graph &G, int N = 1);
     bool hasNSubgraphsApprox(Graph &G, int N = 1);
-    int *getVerticesByDegree();
     void findMinimalExtension(Graph &G, int N = 1);
+    void findMinimalExtensionApprox(Graph &G, int N = 1);
  
 };
