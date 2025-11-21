@@ -12,8 +12,8 @@ private:
     int **edges;
     int nodes;
     bool detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping);
-    std::vector<std::vector<int>> computeVertexMappingCostMatrix(const Graph &hostGraph) const;
-    std::vector<std::vector<int>> selectMappings(const Graph &G, const int K) const;
+    std::vector<std::vector<int>> computeVertexMappingCostMatrix(const Graph &hostGraph, bool inverseCost = false) const;
+    std::vector<std::vector<int>> selectMappings(const Graph &G, const int K, bool inverseCost = false) const;
     std::vector<std::vector<int>> constructEdgeSet(const Graph &G, std::vector<int> mapping) const;
     int *getVerticesByDegree();
 

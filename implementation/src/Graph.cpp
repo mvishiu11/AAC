@@ -7,6 +7,7 @@ extern "C"
 #include "../fastmurty/da.h"
 }
 #include <memory>
+#include <cmath>
 
 using namespace std;
 
@@ -402,7 +403,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
                 cost += mat[i][j];
         return cost;
     };
-
+    cout<<"All Edgesets size: "<<all_Edgesets.size()<<endl;
     // Recursive DFS over combinations of edge sets
     function<void(int)> EdgeDfs = [&](int level)
     {
@@ -461,8 +462,10 @@ void Graph::findMinimalExtensionApprox(Graph &G, int N)
     int Hn = H.getVerticesCount();
     int Gn = G.getVerticesCount();
 
-    int K = H.getSize() * G.getSize()*N;
-    vector<vector<int>> mappings = H.selectMappings(G, K);
+    int K = H.getSize() * G.getSize()*N * 20;
+    // int K = 3000;
+    bool inverseCost = true;
+    vector<vector<int>> mappings = H.selectMappings(G, K, inverseCost);
     vector<vector<int>> all_Edgesets(Hn, vector<int>(Hn, 0));
 
     auto AdjMatrixAdd = [&](vector<vector<int>> &mat1,
@@ -483,10 +486,20 @@ void Graph::findMinimalExtensionApprox(Graph &G, int N)
 
     for (int k = 0; k < K; k++)
     {
+        cout<<"K: "<<k<<endl;
         vector<int> mapping = mappings[k];
+        // if(k < 1000) {
+        //     cout<<"Mapping["<<k<<"]: ";
+        //     for (int u = 0; u < Hn; ++u)
+        //     {
+        //         cout<<mapping[u]<<" ";
+        //     }
+        //     cout<<endl;
+        // }
         bool injective = true;
-        for (int u = 0; u < Hn; ++u)
+        for (int u = 0; u < Gn; ++u)
         {
+            cout<<"Mapping["<<k<<"]["<<u<<"]: "<<mapping[u]<<endl;
             if (mapping[u] < 0)
             {
                 injective = false;
@@ -504,6 +517,7 @@ void Graph::findMinimalExtensionApprox(Graph &G, int N)
         count++;
         if (count == N)
         {
+            cout<<"Count: "<<count<<endl;
             break;
         }
     }
@@ -552,25 +566,50 @@ bool Graph::detectIsomorphism(Graph &hostGraph, const vector<int> &vertexMapping
     return true;
 }
 
-vector<vector<int>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph) const
+vector<vector<int>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph, bool inverseCost) const
 {
     const int patternVertexCount = getVerticesCount();
     const int hostVertexCount = hostGraph.getVerticesCount();
     vector<vector<int>> cost(patternVertexCount, vector<int>(hostVertexCount, 0));
+    int minNegativeCost = 0;
     for (int u = 0; u < patternVertexCount; ++u)
     {
         const int degreeG = getOutDegree(u) + getInDegree(u);
         for (int v = 0; v < hostVertexCount; ++v)
         {
-            const int degreeH = hostGraph.getOutDegree(v) + hostGraph.getInDegree(v);
-            cost[u][v] = max(0, degreeG - degreeH);
+            int vOutDegree = hostGraph.getOutDegree(v);
+            int vInDegree = hostGraph.getInDegree(v);
+            int degreeH = inverseCost ? vOutDegree + vInDegree : vOutDegree - vInDegree;
+            int finalCost = degreeG - degreeH;
+            minNegativeCost = min(minNegativeCost, finalCost);
+            cost[u][v] = finalCost;
             // cout << "Cost[" << u << "][" << v << "]: " << cost[u][v] << endl;
+        }
+    }
+
+    if(minNegativeCost >= 0 || !inverseCost)
+        return cost;
+    
+    int inverseMinCost = -minNegativeCost;
+    for(int u = 0; u < patternVertexCount; ++u)
+    {
+        for(int v = 0; v < hostVertexCount; ++v)
+        {
+            cost[u][v] = cost[u][v] + inverseMinCost;
+        }
+    }
+
+    for(int u = 0; u < patternVertexCount; ++u)
+    {
+        for(int v = 0; v < hostVertexCount; ++v)
+        {
+            cout << "Cost[" << u << "][" << v << "]: " << cost[u][v] << endl;
         }
     }
     return cost;
 }
 
-vector<vector<int>> Graph::selectMappings(const Graph &G, const int K) const
+vector<vector<int>> Graph::selectMappings(const Graph &G, const int K, bool inverseCost) const
 {
     Graph H = *this;
 
@@ -582,7 +621,7 @@ vector<vector<int>> Graph::selectMappings(const Graph &G, const int K) const
         return vector<vector<int>>();
 
     // 1) Build cost matrix using degree differences
-    vector<vector<int>> costMatrixInt = G.computeVertexMappingCostMatrix(H);
+    vector<vector<int>> costMatrixInt = G.computeVertexMappingCostMatrix(H, inverseCost);
     vector<double> costMatrix(m * n, 0.0);
     for (int u = 0; u < m; ++u)
         for (int v = 0; v < n; ++v)
@@ -627,14 +666,16 @@ vector<vector<int>> Graph::selectMappings(const Graph &G, const int K) const
         {
             local.push_back(outAssocs[base+z]);
         }
+        // if(i < 1000) {
+        //     cout<<"Cost["<<i<<"]: "<<outCosts[i]<<endl;
+        // };
         idx[i] = {local, outCosts[i]};
     }
 
-    sort(idx.begin(), idx.end(),
-          [](const auto &a, const auto &b) {
-              return a.second < b.second;   // sort by outCost
-          });
-
+    // for(int k = 0; k < K; k++)
+    // {
+    //     cout<<"Cost["<<k<<"]: "<<idx[k].second<<endl;
+    // }
     vector<vector<int>> mappings(K, vector<int>(m, -1));
     for (int k = 0; k < K; ++k)
     {
@@ -644,14 +685,21 @@ vector<vector<int>> Graph::selectMappings(const Graph &G, const int K) const
             int b = idx[k].first[2*z+1];
             if (a >= 0 && a < m && b >= 0 && b < n)
             {
+                // cout<<"Mapping["<<k<<"]["<<a<<"]: "<<b<<endl;
                 mappings[k][a] = b;
+
             }
         }
-        for (int i = 0; i < m; i++)
-        {
-            // cout<<"Mapping["<<k<<"]["<<i<<"]: "<<mappings[k][i]<<endl;
-        }
+        // if(k < 10)
+        // {
+        //     for (int i = 0; i < m; i++)
+        //     {
+        //         cout<<"Cost["<<i<<"]["<<mappings[k][i]<<"]: "<<idx[k].second<<endl;
+        //     }
+        // }
     }
+
+
 
     deallocateWorkvarsforDA(work);
     return mappings;
