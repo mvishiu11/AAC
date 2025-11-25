@@ -1,13 +1,10 @@
 #include "../include/Graph.hpp"
+#include "../include/Hungarian.hpp"
+
+#include <algorithm>
 #include <functional>
-#include "Graph.hpp"
 #include <set>
-extern "C"
-{
-#include "../fastmurty/da.h"
-}
-#include <memory>
-#include <cmath>
+#include <vector>
 
 using namespace std;
 
@@ -29,6 +26,8 @@ int Graph::getSize() const
 
 bool Graph::hasNSubgraphs(Graph &G, int N)
 {
+    std::cout << "### N SUBGRAPH ISOMORPHISMS ###" << endl; 
+
     Graph H = *this;
     if (G.getVerticesCount() == 0 || G.getVerticesCount() > H.getVerticesCount())
     {
@@ -227,10 +226,9 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     return result;
 }
 
-bool Graph::hasNSubgraphsApprox(Graph &G, int N)
+bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N)
 {
-    // K should be an argument
-
+    std::cout << "### N SUBGRAPH ISOMORPHISMS APPROXIMATION ###" << endl; 
     // Host graph is "this"; pattern graph is G
     Graph H = *this;
 
@@ -241,12 +239,8 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int N)
     if (n == 0 || m > n)
         return false;
 
-    const int K = H.getSize() * G.getSize(); // should be an argument
     int total = 0;
     // 4) Convert each association to a mapping φ and check
-
-    vector<vector<int>> mappings = H.selectMappings(G, K);
-
     for (int k = 0; k < K; ++k)
     {
         vector<int> mapping = mappings[k];
@@ -254,6 +248,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int N)
         // Enforce injectivity (no two pattern vertices map to the same host vertex)
         vector<int> used(n, 0);
         bool injective = true;
+
         for (int u = 0; u < m; ++u)
         {
             if (mapping[u] < 0)
@@ -273,6 +268,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int N)
 
         if (G.detectIsomorphism(H, mapping))
         {
+            cout << "isomorphism #" << total << ": " << mapping << '\n';
             total += 1;
             if (total >= N)
             {
@@ -282,6 +278,21 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int N)
     }
 
     return false;
+}
+
+bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N)
+{
+    Graph H = *this;
+
+    const int m = G.getVerticesCount(); // rows (pattern vertices)
+    const int n = H.getVerticesCount(); // cols (host vertices)
+    if (m == 0)
+        return true;
+    if (n == 0 || m > n)
+        return false;
+
+    vector<Mapping> mappings = H.selectMappings(G, K);
+    return hasNSubgraphsApprox(G, K, mappings, N);
 }
 
 int *Graph::getVerticesByDegree()
@@ -314,6 +325,8 @@ int *Graph::getVerticesByDegree()
 
 void Graph::findMinimalExtension(Graph &G, int N)
 {
+    std::cout << "### MINIMAL EXTENSION ###" << endl; 
+
     Graph H = *this;
 
     int Hn = H.getVerticesCount();
@@ -403,7 +416,6 @@ void Graph::findMinimalExtension(Graph &G, int N)
                 cost += mat[i][j];
         return cost;
     };
-    cout<<"All Edgesets size: "<<all_Edgesets.size()<<endl;
     // Recursive DFS over combinations of edge sets
     function<void(int)> EdgeDfs = [&](int level)
     {
@@ -423,7 +435,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
         if (cost > bestCost)
             return;
 
-        for (int i = 0; i < all_Edgesets.size(); i++)
+        for (size_t i = 0; i < all_Edgesets.size(); i++)
         {
             if (usedEdgeSets.count(i) == 0)
             {
@@ -451,23 +463,31 @@ void Graph::findMinimalExtension(Graph &G, int N)
         }
         cout << endl;
     }
-    // return {bestCost, bestEdgeSet};
 }
 
-void Graph::findMinimalExtensionApprox(Graph &G, int N)
+void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N)
 {
-
+    std::cout << "### MINIMAL EXTENSION APPROXIMATION ###" << endl; 
     Graph H = *this;
 
     int Hn = H.getVerticesCount();
     int Gn = G.getVerticesCount();
 
-    int K = H.getSize() * G.getSize()*N * 20;
-    // int K = 3000;
-    bool inverseCost = true;
-    vector<vector<int>> mappings = H.selectMappings(G, K, inverseCost);
     vector<vector<int>> all_Edgesets(Hn, vector<int>(Hn, 0));
-
+    
+    vector<bool> is_isomorphism(mappings.size());
+    int total = 0;
+    std::transform(mappings.begin(),mappings.end(), is_isomorphism.begin(),
+        [&G,&H,&total](auto it){
+            if (G.detectIsomorphism(H, it)) {
+                total += 1;
+                cout << "isomorphism #" << total << ": " << it << '\n';
+                return true;
+            }
+            return false;
+        }
+    );
+    
     auto AdjMatrixAdd = [&](vector<vector<int>> &mat1,
                             const vector<vector<int>> &mat2)
     {
@@ -482,47 +502,36 @@ void Graph::findMinimalExtensionApprox(Graph &G, int N)
         }
     };
 
-    int count = 0;
 
     for (int k = 0; k < K; k++)
     {
-        cout<<"K: "<<k<<endl;
+        if (is_isomorphism[k]) {
+            continue;
+        }
         vector<int> mapping = mappings[k];
-        // if(k < 1000) {
-        //     cout<<"Mapping["<<k<<"]: ";
-        //     for (int u = 0; u < Hn; ++u)
-        //     {
-        //         cout<<mapping[u]<<" ";
-        //     }
-        //     cout<<endl;
-        // }
         bool injective = true;
         for (int u = 0; u < Gn; ++u)
         {
-            cout<<"Mapping["<<k<<"]["<<u<<"]: "<<mapping[u]<<endl;
             if (mapping[u] < 0)
             {
                 injective = false;
                 break;
             }
         }
-        if (!injective)
+        if (!injective) {
             continue;
-
-        if (G.detectIsomorphism(H, mapping))
-            continue;
-
+        }
+        total+=1;
+        cout << "extension #" << total << ": " << mapping << '\n';
         vector<vector<int>> current_edgeset = H.constructEdgeSet(G, mapping);
         AdjMatrixAdd(all_Edgesets, current_edgeset);
-        count++;
-        if (count == N)
+
+        if (total == N)
         {
-            cout<<"Count: "<<count<<endl;
             break;
         }
     }
-
-    cout << "Approx extension: " << endl;
+    cout << "Extension Matrix: " << endl;
 
     for (int a = 0; a < Hn; a++)
     {
@@ -532,6 +541,13 @@ void Graph::findMinimalExtensionApprox(Graph &G, int N)
         }
         cout << endl;
     }
+}
+
+void Graph::findMinimalExtensionApprox(Graph &G, int K, int N)
+{
+    Graph H = *this;
+    vector<Mapping> mappings = H.selectMappings(G, K);
+    return findMinimalExtensionApprox(G, K, mappings, N);
 }
 
 bool Graph::detectIsomorphism(Graph &hostGraph, const vector<int> &vertexMapping)
@@ -566,146 +582,71 @@ bool Graph::detectIsomorphism(Graph &hostGraph, const vector<int> &vertexMapping
     return true;
 }
 
-vector<vector<int>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph, bool inverseCost) const
+vector<vector<double>> Graph::computeVertexMappingCostMatrix(const Graph &hostGraph) const
 {
     const int patternVertexCount = getVerticesCount();
     const int hostVertexCount = hostGraph.getVerticesCount();
-    vector<vector<int>> cost(patternVertexCount, vector<int>(hostVertexCount, 0));
-    int minNegativeCost = 0;
+    vector<vector<double>> cost(patternVertexCount, vector<double>(hostVertexCount, 0));
+    double minCost = 0;
     for (int u = 0; u < patternVertexCount; ++u)
     {
-        const int degreeG = getOutDegree(u) + getInDegree(u);
+        const int uOutDeg = getOutDegree(u);
+        const int uInDeg = getInDegree(u);
         for (int v = 0; v < hostVertexCount; ++v)
         {
-            int vOutDegree = hostGraph.getOutDegree(v);
-            int vInDegree = hostGraph.getInDegree(v);
-            int degreeH = inverseCost ? vOutDegree + vInDegree : vOutDegree - vInDegree;
-            int finalCost = degreeG - degreeH;
-            minNegativeCost = min(minNegativeCost, finalCost);
+            int vOutDeg = hostGraph.getOutDegree(v);
+            int vInDeg = hostGraph.getInDegree(v);
+            // (uInDeg<vInDeg ? 1 : -1) - positive cost is bad, and it is bad for us if H has higher degree than G for given vertex in mapping
+            // int inCost = (uInDeg<vInDeg ? 1 : -1) * (uInDeg-vInDeg) * (uInDeg-vInDeg);
+            // int outCost = (uOutDeg<vOutDeg ? 1 : -1) * (uOutDeg-vOutDeg) * (uOutDeg-vOutDeg); 
+            double finalCost = (uOutDeg+uInDeg)-(vOutDeg+vInDeg);
+            minCost = min(minCost, finalCost);
             cost[u][v] = finalCost;
-            // cout << "Cost[" << u << "][" << v << "]: " << cost[u][v] << endl;
         }
     }
 
-    if(minNegativeCost >= 0 || !inverseCost)
+    if(minCost >= 0)
         return cost;
     
-    int inverseMinCost = -minNegativeCost;
     for(int u = 0; u < patternVertexCount; ++u)
     {
         for(int v = 0; v < hostVertexCount; ++v)
         {
-            cost[u][v] = cost[u][v] + inverseMinCost;
+            cost[u][v] = cost[u][v] - minCost;
         }
     }
 
-    for(int u = 0; u < patternVertexCount; ++u)
-    {
-        for(int v = 0; v < hostVertexCount; ++v)
-        {
-            cout << "Cost[" << u << "][" << v << "]: " << cost[u][v] << endl;
-        }
-    }
     return cost;
 }
 
-vector<vector<int>> Graph::selectMappings(const Graph &G, const int K, bool inverseCost) const
+vector<Mapping> Graph::selectMappings(const Graph &G, const int K) const
 {
-    Graph H = *this;
-
+    const Graph& H = *this;
     const int m = G.getVerticesCount(); // rows (pattern vertices)
     const int n = H.getVerticesCount(); // cols (host vertices)
     if (m == 0)
-        return vector<vector<int>>();
+        return vector<Mapping>();
     if (n == 0 || m > n)
-        return vector<vector<int>>();
+        return vector<Mapping>();
 
-    // 1) Build cost matrix using degree differences
-    vector<vector<int>> costMatrixInt = G.computeVertexMappingCostMatrix(H, inverseCost);
-    vector<double> costMatrix(m * n, 0.0);
-    for (int u = 0; u < m; ++u)
-        for (int v = 0; v < n; ++v)
-            costMatrix[u * n + v] = static_cast<double>(costMatrixInt[u][v]);
-
-    // 2) Prepare priors (single prior that includes all rows/cols)
-    const int numRowPriors = 1;
-    const int numColPriors = 1;
-    unique_ptr<bool[]> rowPriors(new bool[numRowPriors * m]);
-    fill(rowPriors.get(), rowPriors.get() + (numRowPriors * m), true);
-    vector<double> rowPriorWeights(numRowPriors, 0.0);
-    unique_ptr<bool[]> colPriors(new bool[numColPriors * n]);
-    fill(colPriors.get(), colPriors.get() + (numColPriors * n), true);
-    vector<double> colPriorWeights(numColPriors, 0.0);
-
-    // 3) Run Murty (K-best) via fastmurty
-    vector<int> outAssocs(K * (m + n) * 2, -2);
-    vector<double> outCosts(K, 0.0);
-
-    WorkvarsforDA work = allocateWorkvarsforDA(m, n, K);
-    int ret = da(
-        costMatrix.data(),
-        numRowPriors, rowPriors.get(), rowPriorWeights.data(),
-        numColPriors, colPriors.get(), colPriorWeights.data(),
-        K, outAssocs.data(), outCosts.data(), &work);
-
-    // for(int i = 0; i<K*(m+n)*2; i++){
-    //     cout<<"Association "<<i<<": "<<outAssocs[i]<<endl;
-    // }
-
-    // if(ret!=0) {
-    //     cout<<"Error: "<<ret<<endl;
-    //     return false;// ret==0 success, non-zero means fewer than K associations
-    // }
-    vector<pair<vector<int>, double>> idx(K);
-    for (int i = 0; i < K; i++)
-    {
-
-        int base = i * (m + n) * 2;
-        vector<int> local;
-        for (int z = 0; z < (m + n)*2; ++z)
-        {
-            local.push_back(outAssocs[base+z]);
+    CostMatrix costMatrix = G.computeVertexMappingCostMatrix(H);
+    
+    vector<Assignment> x = murty(costMatrix, K);
+    vector<Mapping> mappings(K);
+    for (size_t i = 0; i<x.size(); i++) {
+        auto &a = x[i];
+        cout << "assignment #" << i << ": ";
+        for (size_t j = 0; j<a.mapping.size(); j++) {
+            cout << a.mapping[j] << ' ';
         }
-        // if(i < 1000) {
-        //     cout<<"Cost["<<i<<"]: "<<outCosts[i]<<endl;
-        // };
-        idx[i] = {local, outCosts[i]};
-    }
+        cout << "/ " << a.cost << endl;
+        mappings[i]=a.mapping;
+    }    
 
-    // for(int k = 0; k < K; k++)
-    // {
-    //     cout<<"Cost["<<k<<"]: "<<idx[k].second<<endl;
-    // }
-    vector<vector<int>> mappings(K, vector<int>(m, -1));
-    for (int k = 0; k < K; ++k)
-    {
-        for (int z = 0; z < (m + n); ++z)
-        {
-            int a = idx[k].first[2*z+0];
-            int b = idx[k].first[2*z+1];
-            if (a >= 0 && a < m && b >= 0 && b < n)
-            {
-                // cout<<"Mapping["<<k<<"]["<<a<<"]: "<<b<<endl;
-                mappings[k][a] = b;
-
-            }
-        }
-        // if(k < 10)
-        // {
-        //     for (int i = 0; i < m; i++)
-        //     {
-        //         cout<<"Cost["<<i<<"]["<<mappings[k][i]<<"]: "<<idx[k].second<<endl;
-        //     }
-        // }
-    }
-
-
-
-    deallocateWorkvarsforDA(work);
     return mappings;
 }
 
-vector<vector<int>> Graph::constructEdgeSet(const Graph &G, vector<int> mapping) const
+vector<vector<int>> Graph::constructEdgeSet(const Graph &G, Mapping mapping) const
 {
 
     Graph H = *this;

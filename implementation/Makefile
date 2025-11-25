@@ -7,7 +7,7 @@
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -Iinclude -g
 
-SRC := src/main.cpp src/Graph.cpp
+SRC := src/main.cpp src/Graph.cpp src/Hungarian.cpp
 BUILD_DIR := build
 BIN_DIR := bin
 OBJS := $(patsubst src/%.cpp,$(BUILD_DIR)/%.o,$(SRC))

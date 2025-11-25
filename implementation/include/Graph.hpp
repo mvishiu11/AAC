@@ -1,23 +1,20 @@
-#include <iostream>
+#include "Hungarian.hpp"
 #include <vector>
-#include <string>
-#include <fstream>
-#include <algorithm>
 
 #pragma once
 
 class Graph
 {
 private:
-    int **edges;
     int nodes;
+    int **edges;
     bool detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping);
-    std::vector<std::vector<int>> computeVertexMappingCostMatrix(const Graph &hostGraph, bool inverseCost = false) const;
-    std::vector<std::vector<int>> selectMappings(const Graph &G, const int K, bool inverseCost = false) const;
-    std::vector<std::vector<int>> constructEdgeSet(const Graph &G, std::vector<int> mapping) const;
+    CostMatrix computeVertexMappingCostMatrix(const Graph &hostGraph) const;
+    std::vector<std::vector<int>> constructEdgeSet(const Graph &G, Mapping mapping) const;
     int *getVerticesByDegree();
-
+    
 public:
+    std::vector<Mapping> selectMappings(const Graph &G, const int K) const;
     Graph(int nodes, int **edges) : nodes(nodes), edges(edges) {}
     int getSize() const;
     int getVerticesCount() const { return nodes; }
@@ -41,8 +38,9 @@ public:
         return inDegree;
     }
     bool hasNSubgraphs(Graph &G, int N = 1);
-    bool hasNSubgraphsApprox(Graph &G, int N = 1);
+    bool hasNSubgraphsApprox(Graph &G, int K, int N = 1);
+    bool hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1);
     void findMinimalExtension(Graph &G, int N = 1);
-    void findMinimalExtensionApprox(Graph &G, int N = 1);
- 
+    void findMinimalExtensionApprox(Graph &G, int K, int N = 1);
+    void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1);
 };
