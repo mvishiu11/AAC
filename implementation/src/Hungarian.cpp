@@ -195,9 +195,9 @@ std::vector<Assignment> murty(const std::vector<std::vector<double>>& costMat, i
 
 std::ostream& operator<<(std::ostream& os, const Mapping& m) {
     os << '[';
-    for (int i = 0; i<m.size(); i++) {
+    for (std::size_t i = 0; i < m.size(); ++i) {
         os << m[i];
-        if (i!=m.size()-1) {
+        if (i != m.size() - 1) {
             os << ", ";
         }
     }
