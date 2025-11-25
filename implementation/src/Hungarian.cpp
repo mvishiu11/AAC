@@ -1,7 +1,7 @@
 #include "../include/Hungarian.hpp"
 #include <algorithm>
 
-bool Assignment::operator<(Assignment const& o) const { return cost > o.cost; } // for min-heap with greater
+bool Assignment::operator<(Assignment const& o) const { return cost > o.cost; }
 bool Node::operator<(Node const& o) const { return mapping_cost > o.mapping_cost; }
 
 // Based on:
@@ -129,10 +129,6 @@ std::vector<Assignment> murty(const std::vector<std::vector<double>>& costMat, i
         a.mapping = node.mapping;
         a.cost = node.mapping_cost;
         results.push_back(a);
-    
-        /// Generate children by branching on the first row where assignment differs from fixed (or iterate rows)
-        /// Standard Murty: for t = 0..r-1, create a child fixing first t rows same as current and banning that particular assignment at row t+1
-        /// We'll construct children for each row i where fixed_col[i] != base_assign[i]
         
         // For each row 
         for (int row=0;row<rows;row++) {
