@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     cout << "### SELECT MAPPINGS ###" << endl;
     const std::vector<Mapping> mappings = H.selectMappings(G,K);
 
-    if(G.hasNSubgraphs(H, N)) {
+    if(H.hasNSubgraphs(G, N)) {
         cout << "EXACT: YES" << endl;
     } else {
         cout << "EXACT: NO" << endl;
@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
         cout << "APPROXIMATION: NO" << endl;
     }
     
-    G.findMinimalExtension(H, N);
+    H.findMinimalExtension(G, N);
     H.findMinimalExtensionApprox(G, K, mappings, N);
     return 0;
 }
