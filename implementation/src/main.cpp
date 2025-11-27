@@ -1,37 +1,58 @@
+#include <algorithm>
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <tuple>
+#include <vector>
 #include "../include/Graph.hpp"
-extern "C" {
-    #include "../fastmurty/da.h"
-}
 
 using namespace std;
 
 Graph* parseInput(string filename, int* N);
 Graph createGraphFromFile(ifstream& file);
 
+int maxK(int h, int g) {
+    // (h choose g)g! 
+    // = h!/(h-g)! 
+    // = h*(h-1)*...*(h-g+2)*(h-g+1)
+    if (g > h) return 0;
+    if (g == 0) return 1;
+    int result = 1;
+    for (int i = 0; i < g; ++i) {
+        result *= (h - i);
+    }
+    return result;
+}
+
 int main(int argc, char** argv) {
     if(argc < 2) return -1;
     string filename = argv[1];
     int N;
     auto graphs = parseInput(filename, &N);
-    Graph H = graphs[0];
-    Graph G = graphs[1];
-    if(G.hasNSubgraphs(H, N)) {
-        cout << "YES" << endl;
+    Graph G = graphs[0];
+    Graph H = graphs[1];
+
+    int mK = maxK(H.getVerticesCount(),G.getVerticesCount());
+    int K = 123;
+    K = std::min(K,mK); // In case our K is greater than maximum number of possible mappings
+    
+    cout << "### SELECT MAPPINGS ###" << endl;
+    const std::vector<Mapping> mappings = H.selectMappings(G,K);
+
+    if(H.hasNSubgraphs(G, N)) {
+        cout << "EXACT: YES" << endl;
     } else {
-        cout << "NO" << endl;
+        cout << "EXACT: NO" << endl;
     }
-    if(G.hasNSubgraphsApprox(H, N)) {
-        cout << "YES APPROX" << endl;
+    
+    if(H.hasNSubgraphsApprox(G, K, mappings, N)) {
+        cout << "APPROXIMATION: YES" << endl;
     } else {
-        cout << "NO APPROX" << endl;
+        cout << "APPROXIMATION: NO" << endl;
     }
-    G.findMinimalExtension(H, N);
-    G.findMinimalExtensionApprox(H, N);
+    
+    H.findMinimalExtension(G, N);
+    H.findMinimalExtensionApprox(G, K, mappings, N);
     return 0;
 }
 
@@ -43,12 +64,12 @@ Graph* parseInput(string filename, int* N) {
         return nullptr;
     }
 
-    Graph H = createGraphFromFile(file);
     Graph G = createGraphFromFile(file);
+    Graph H = createGraphFromFile(file);
 
     Graph* graphs = (Graph*)malloc(2 * sizeof(Graph));
-    graphs[0] = H;
-    graphs[1] = G;
+    graphs[0] = G;
+    graphs[1] = H;
     string line;
     getline(file, line);
     *N = stoi(line);
@@ -73,3 +94,4 @@ Graph createGraphFromFile(ifstream& file) {
     Graph graph(nodes, edges);
     return graph;
 }
+

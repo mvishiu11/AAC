@@ -1,9 +1,0 @@
-[project]
-name = "multigraph-matching"
-version = "0.1.0"
-description = "Subgraph matching & minimal extension for undirected multigraphs"
-requires-python = ">=3.12"
-
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
