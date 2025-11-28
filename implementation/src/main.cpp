@@ -41,7 +41,7 @@ int main(int argc, char **argv)
         return -1;
     }
     if(N<1){
-        cout<<"N needa to be >1!"<<endl;
+        cout<<"N needa to be greater or equal to 1!"<<endl;
         return -1;
     }
     auto graphs = parseInput(filename);
@@ -52,19 +52,16 @@ int main(int argc, char **argv)
     int K = H.getVerticesCount()*G.getVerticesCount();
     K = std::min(K, mK); // In case our K is greater than maximum number of possible mappings
 
-    cout << "### SELECT MAPPINGS ###" << endl;
-    const std::vector<Mapping> mappings = H.selectMappings(G, K);
-
     if (algorithm == "exact")
     {
         cout<<"\n ===== EXACT ALGORITHMS ===== \n"<<endl;
         if (H.hasNSubgraphs(G, N))
         {
-            cout << "EXACT: YES" << endl;
+            cout << "\nANSWER: YES\n" << endl;
         }
         else
         {
-            cout << "EXACT: NO" << endl;
+            cout << "\nANSWER: NO\n" << endl;
             H.findMinimalExtension(G, N);
         }
     }
@@ -72,13 +69,15 @@ int main(int argc, char **argv)
     if (algorithm == "approx")
     {
         cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
+        cout << "\n ### MAPPINGS SELECTION ### \n" << endl;
+        const std::vector<Mapping> mappings = H.selectMappings(G, K);
         if (H.hasNSubgraphsApprox(G, K, mappings, N))
         {
-            cout << "APPROXIMATION: YES" << endl;
+            cout << "\nANSWER: YES\n" << endl;
         }
         else
         {
-            cout << "APPROXIMATION: NO" << endl;
+            cout << "\nANSWER: NO\n" << endl;
             H.findMinimalExtensionApprox(G, K, mappings, N);
         }
     }

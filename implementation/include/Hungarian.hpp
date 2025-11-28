@@ -1,10 +1,8 @@
 #ifndef H_HUNGARIAN
 #define H_HUNGARIAN
-#include <bits/stdc++.h>
 #include <limits>
 #include <ostream>
 #include <vector>
-
 using Cost = double;
 using CostMatrix = std::vector<std::vector<Cost>>;
 using Mapping = std::vector<int>;

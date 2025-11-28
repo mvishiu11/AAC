@@ -1,5 +1,6 @@
 #include "../include/Hungarian.hpp"
 #include <algorithm>
+#include <queue>
 
 bool Assignment::operator<(Assignment const& o) const { return cost > o.cost; }
 bool Node::operator<(Node const& o) const { return mapping_cost > o.mapping_cost; }

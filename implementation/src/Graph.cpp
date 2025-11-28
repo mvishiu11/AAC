@@ -1,6 +1,6 @@
 #include "../include/Graph.hpp"
 #include "../include/Hungarian.hpp"
-
+#include <iostream>
 #include <algorithm>
 #include <functional>
 #include <set>
@@ -159,7 +159,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
         if (t == Gn)
         {
             count++;
-            cout << "Succesful mapping: ";
+            cout << "mapping #" << count <<": ";
             for (int i = 0; i < Gn; ++i)
             {
                 cout << mapping[i] << " ";
@@ -268,8 +268,8 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
 
         if (G.detectIsomorphism(H, mapping))
         {
-            cout << "isomorphism #" << total << ": " << mapping << '\n';
             total += 1;
+            cout << "isomorphism #" << total << ": " << mapping << '\n';
             if (total >= N)
             {
                 return true;
@@ -453,8 +453,9 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
     EdgeDfs(0);
 
-    cout << "Best cost: " << bestCost << endl;
+    cout << "Extension cost: " << bestCost << endl;
 
+    cout << "Extension Matrix: " << endl;
     for (int a = 0; a < Hn; a++)
     {
         for (int b = 0; b < Hn; b++)
@@ -531,6 +532,15 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
             break;
         }
     }
+    int cost = 0; 
+    for (int a = 0; a < Hn; a++)
+    {
+        for (int b = 0; b < Hn; b++)
+        {
+            cost += all_Edgesets[b][a];
+        }
+    }
+    cout << "Extension Cost: " << cost << endl;
     cout << "Extension Matrix: " << endl;
 
     for (int a = 0; a < Hn; a++)
