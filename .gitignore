@@ -3,7 +3,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 dist/
-build/
 
 # Created by https://www.toptal.com/developers/gitignore/api/c++
 # Edit at https://www.toptal.com/developers/gitignore?templates=c++
@@ -18,7 +17,6 @@ papers/
 # Compiled Object files
 *.slo
 *.lo
-*.o
 *.obj
 
 # Precompiled Headers

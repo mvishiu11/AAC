@@ -12,11 +12,10 @@ BUILD_DIR := build
 BIN_DIR := bin
 OBJS := $(patsubst src/%.cpp,$(BUILD_DIR)/%.o,$(SRC))
 EXEC := $(BIN_DIR)/main.o
-EXEC_EXE := $(EXEC).exe
 
 .PHONY: all clean
 
-all: $(EXEC) $(EXEC_EXE)
+all: $(EXEC)
 
 $(BUILD_DIR)/%.o: src/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -24,14 +23,11 @@ $(BUILD_DIR)/%.o: src/%.cpp | $(BUILD_DIR)
 $(EXEC): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(OBJS) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(EXEC_EXE): $(EXEC) | $(BIN_DIR)
-	cp $(EXEC) $(EXEC_EXE)
-
 $(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+	mkdir $(BUILD_DIR)
 
 $(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+	mkdir $(BIN_DIR)
 
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
