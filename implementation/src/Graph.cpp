@@ -390,7 +390,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
     DFS(0);
 
     int counter = 0;
-    int bestCost = __INT_MAX__;
+    int bestCost = INT_MAX;
     vector<vector<int>> bestEdgeSet(Hn, vector<int>(Hn, 0));
     vector<int> usedInSum(N, -1);
     vector<vector<int>> sum(Hn, vector<int>(Hn, 0));
@@ -645,11 +645,11 @@ vector<Mapping> Graph::selectMappings(const Graph &G, const int K) const
     vector<Mapping> mappings(K);
     for (size_t i = 0; i<x.size(); i++) {
         auto &a = x[i];
-        cout << "assignment #" << i << ": ";
+        // cout << "assignment #" << i << ": ";
         for (size_t j = 0; j<a.mapping.size(); j++) {
-            cout << a.mapping[j] << ' ';
+            // cout << a.mapping[j] << ' ';
         }
-        cout << "/ " << a.cost << endl;
+        // cout << "/ " << a.cost << endl;
         mappings[i]=a.mapping;
     }    
 
