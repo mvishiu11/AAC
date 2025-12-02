@@ -531,6 +531,13 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
             break;
         }
     }
+
+    int cost = 0;
+    for (int a = 0; a < Hn; a++)
+        for (int b = 0; b < Hn; b++)
+            cost += all_Edgesets[a][b];
+    cout << "Best cost: " << cost << endl;
+
     cout << "Extension Matrix: " << endl;
 
     for (int a = 0; a < Hn; a++)

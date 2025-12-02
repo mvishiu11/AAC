@@ -23,11 +23,14 @@ $(BUILD_DIR)/%.o: src/%.cpp | $(BUILD_DIR)
 $(EXEC): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(OBJS) $(LDFLAGS) $(LDLIBS) -o $@
 
+$(EXEC_EXE): $(EXEC) | $(BIN_DIR)
+	cp $(EXEC) $(EXEC_EXE)
+
 $(BUILD_DIR):
-	mkdir $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)
 
 $(BIN_DIR):
-	mkdir $(BIN_DIR)
+	mkdir -p $(BIN_DIR)
 
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)

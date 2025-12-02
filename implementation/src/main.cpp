@@ -20,12 +20,13 @@ int maxK(int h, int g)
         return 0;
     if (g == 0)
         return 1;
-    int result = 1;
+    long long result = 1;
     for (int i = 0; i < g; ++i)
     {
         result *= (h - i);
+        if (result > 2147483647) return 2147483647;
     }
-    return result;
+    return (int)result;
 }
 
 int main(int argc, char **argv)
