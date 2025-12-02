@@ -138,13 +138,13 @@ def visualize_extension(H, extension_matrix, title, filename):
     plt.savefig(filename)
     plt.close()
 
-def run_single_experiment(algo, G, H, temp_file):
+def run_single_experiment(algo, G, H, temp_file, n_mappings=1):
     save_graph_to_file(G, H, temp_file)
     
     start_time = time.time()
     try:
         result = subprocess.run(
-            [IMPLEMENTATION_BIN, algo, temp_file, "1"],
+            [IMPLEMENTATION_BIN, algo, temp_file, str(n_mappings)],
             capture_output=True,
             text=True,
             timeout=60 # 1 minute timeout
@@ -365,6 +365,77 @@ def run_suite(experiments=None):
             "approx_cost": res_approx["cost"]
         })
 
+    # --- Experiment 5: Cost vs N (Simultaneous Embeddings) ---
+    # Tests how extension cost grows as we demand more simultaneous embeddings (N parameter)
+    if experiments is None or "cost_vs_n" in experiments:
+        print("Running Cost vs N (Simultaneous Embeddings) Tests...")
+        
+        # Fixed graph pair, varying N (number of required simultaneous mappings)
+        # As N increases, the algorithm must find N vertex-disjoint embeddings,
+        # requiring more edges to be added to H
+        
+        densities_to_test = [0.3, 0.5, 0.7]
+        
+        for density in densities_to_test:
+            # G size and H size chosen so H can potentially accommodate multiple copies of G
+            size_g = 5
+            size_h = 25  # H has 5x the vertices of G, so up to 5 disjoint embeddings possible
+            max_n = size_h // size_g  # Maximum possible disjoint embeddings
+            
+            print(f"  Testing density {density}, G={size_g}, H={size_h}, N=1..{max_n}...")
+            
+            for i in range(10):  # 10 random graph pairs per density
+                G = generate_random_multigraph(size_g, density, 2, seed=3000 + i)
+                H = generate_random_multigraph(size_h, density, 2, seed=4000 + i)
+                
+                # Test increasing values of N
+                for n_mappings in range(1, max_n + 1):
+                    res = run_single_experiment("approx", G, H, temp_file, n_mappings=n_mappings)
+                    
+                    if res["success"]:
+                        results.append({
+                            "experiment": "cost_vs_n",
+                            "algorithm": "approx",
+                            "size_G": size_g,
+                            "size_H": size_h,
+                            "n_mappings": n_mappings,
+                            "density": density,
+                            "time": res["time_ms"],
+                            "cost": res["cost"]
+                        })
+                        print(f"    N={n_mappings}, density={density}: Cost={res['cost']}, Time={res['time_ms']:.2f}ms")
+                    else:
+                        print(f"    N={n_mappings}, density={density}: Failed ({res.get('error', 'unknown')})")
+        
+        # 5b. Exact algorithm version for small N values (ground truth)
+        print("  Testing Exact algorithm for small N values...")
+        size_g_exact = 4
+        size_h_exact = 12  # Can fit up to 3 disjoint copies
+        max_n_exact = 3
+        density_exact = 0.5
+        
+        for i in range(10):
+            G = generate_random_multigraph(size_g_exact, density_exact, 2, seed=5000 + i)
+            H = generate_random_multigraph(size_h_exact, density_exact, 2, seed=6000 + i)
+            
+            for n_mappings in range(1, max_n_exact + 1):
+                res = run_single_experiment("exact", G, H, temp_file, n_mappings=n_mappings)
+                
+                if res["success"]:
+                    results.append({
+                        "experiment": "cost_vs_n",
+                        "algorithm": "exact",
+                        "size_G": size_g_exact,
+                        "size_H": size_h_exact,
+                        "n_mappings": n_mappings,
+                        "density": density_exact,
+                        "time": res["time_ms"],
+                        "cost": res["cost"]
+                    })
+                    print(f"    Exact N={n_mappings}: Cost={res['cost']}, Time={res['time_ms']:.2f}ms")
+                else:
+                    print(f"    Exact N={n_mappings}: Failed ({res.get('error', 'unknown')})")
+
     # Save Results
     df = pd.DataFrame(results)
     df.to_csv(os.path.join(base_dir, "results.csv"), index=False)
@@ -375,7 +446,7 @@ def run_suite(experiments=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run benchmark experiments.")
-    parser.add_argument("experiments", nargs="*", help="List of experiments to run (accuracy, scalability, density, visual). If empty, runs all.")
+    parser.add_argument("experiments", nargs="*", help="List of experiments to run (accuracy, scalability, density, visual, cost_vs_n). If empty, runs all.")
     args = parser.parse_args()
     
     run_suite(experiments=args.experiments if args.experiments else None)
