@@ -1,0 +1,10 @@
+^C:\USERS\REMEK\DOCUMENTS\GITHUB\AAC\IMPLEMENTATION\BUILD\CMAKEFILES\85F553C08AA93276FD512AFE4980D9A0\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/remek/Documents/GitHub/AAC/implementation -BC:/Users/remek/Documents/GitHub/AAC/implementation/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/remek/Documents/GitHub/AAC/implementation/build/AAC-FEAT-IMPLEMENTATION.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
