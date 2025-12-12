@@ -1,97 +1,72 @@
 #include "../include/Hungarian.hpp"
-#include <algorithm>
 
 bool Assignment::operator<(Assignment const& o) const { return cost > o.cost; }
 bool Node::operator<(Node const& o) const { return mapping_cost > o.mapping_cost; }
 
-// Based on:
-// https://cyberlab.engr.uconn.edu/wp-content/uploads/sites/2576/2018/09/Lecture_8.pdf
-// (Actually, it's the JVC algorithm which is in a sense a variant of the hungarian method)
-Assignment hungarian(const CostMatrix& a) {
-    int n = a.size(); 
-    if (n==0) {
-        return {{},0};
-    }
-    int m = a[0].size();
-    int N = std::max(n,m);
-    // For rectangular matrix (|V(G)|<|V(H)|), we pad it with INFs
-    CostMatrix cost(N, std::vector<Cost>(N, 0));
-    for (int row=0;row<N;row++)
-        for (int col=0;col<N;col++) 
-            cost[row][col] = (row<n && col<m) ? a[row][col] : INF; // Padding
+constexpr bool ckmin(Cost& a, const Cost& b) { 
+    return b < a ? a = b, true : false; 
+}
 
-    // Potentials of each column
-    std::vector<Cost> u(N+1), v(N+1);
+Assignment hungarian(const CostMatrix& C) {
+    const int M = static_cast<int>(C.size());
+    const int N = static_cast<int>(C[0].size());
+    const int N1 = N+1;
+    assert(M <= N);
 
-    // mapped[i] = k => ith column matched with kth row
-    std::vector<int> mapped(N+1);
-    // way[i] = k => kth column currently precedes ith column 
-    std::vector<int> way(N+1);
-    // Final mapping
-    std::vector<int> answer(N, -1);
-    for (int row=1;row<=N;row++) {
-        mapped[0] = row;
-        int col0 = 0;
-        // minv[i] = x => current minimal cost to reach ith column
-        std::vector<double> minv(N+1, INF);
-        // used[i] = true => column already mapped
-        std::vector<bool> used(N+1, false);
+    Rows y(N1, NoRow);
+    Costs potential(N);
+    Cost current = 0;
 
-        // Repeat until the column is mapped
-        do {
-            used[col0] = true;
-            int row0 = mapped[col0], col1 = 0;
-            // Minimum cost to map another column
-            double delta = INF;
+    for (int i = 0; i < M; ++i) {
+        int j = N;
+        y[j] = i;
+        Costs dist(N1, INF);
+        dist[N] = 0;
+        std::vector<bool> vis(N + 1);
+        Columns pred(N1, -1);
 
-            // For every reduced column
-            for (int col=1;col<=N;col++) {
-                if (!used[col]) {
-                    // Reduce cost
-                    double cur = cost[row0-1][col-1] - u[row0] - v[col];
-                    // If minimum, remember it and its path
-                    if (cur < minv[col]) { 
-                        minv[col] = cur; way[col] = col0; 
+        while (y[j] != NoRow) {
+            Cost min_dist = INF;
+            vis[j] = true;
+            int j_next = NoColumn;
+
+            for (int j1 = 0; j1 < N; ++j1) {
+                if (!vis[j1]) {
+                    Cost edge = C[y[j]][j1] - potential[j1];
+                    if (j != N) {
+                        edge -= C[y[j]][j] - potential[j];
+                        assert(edge >= 0);
                     }
-                    // Update delta if we found a smaller reduction
-                    if (minv[col] < delta) { 
-                        delta = minv[col]; col1 = col; 
+                    if (dist[j] + edge < dist[j1]) {
+                        dist[j1] = dist[j] + edge;
+                        pred[j1] = j;
+                    }
+                    if (dist[j1]<min_dist) {
+                        min_dist = dist[j1];
+                        j_next = j1;
                     }
                 }
             }
-            // Update potentials of each column
-            for (int col=0;col<=N;col++) {
-                if (used[col]) { 
-                    u[mapped[col]] += delta; v[col] -= delta; 
-                }
-                else minv[col] -= delta;
-            }
-            col0 = col1;
-        } while (mapped[col0] != 0);
-        // Reconstruct the path 
-        do {
-            int col1 = way[col0];
-            mapped[col0] = mapped[col1];
-            col0 = col1;
-        } while (col0);
+            j = j_next;
+        }
+        for (int w = 0; w < N; ++w) {
+            ckmin(dist[w], dist[j]);
+            potential[w] += dist[w];
+        }
+        current += potential[j];
+
+        for (int w; j != N; j = w) 
+            y[j] = y[w = pred[j]];
     }
-    
-    // Get the mapped values
-    for (int j=1;j<=N;j++) {
-        if (mapped[j] <= N) {
-            answer[mapped[j]-1] = j-1;
+
+    std::vector<int> jobMapping(M);
+    for (int w = 0; w < N; ++w) {
+        if (y[w] != NoRow) {
+            jobMapping[y[w]] = w;
         }
     }
-    // Calculate total cost
-    double total = 0;
-    Mapping mapping(n, -1);
-    for (int i=0;i<n;i++) {
-        if (answer[i] < m) {
-            mapping[i] = answer[i];
-            total += a[i][answer[i]];
-        } else mapping[i] = -1;
-    }
-    return {mapping, total};
+
+    return { jobMapping, current };
 }
 
 
@@ -203,4 +178,9 @@ std::ostream& operator<<(std::ostream& os, const Mapping& m) {
     }
     os << ']';
     return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Assignment& a) {
+    os << a.mapping << " / " << a.cost;
+    return os ;
 }

@@ -5,10 +5,16 @@
 #include <ostream>
 #include <vector>
 
+using Row = int;
+using Column = int;
 using Cost = double;
 using CostMatrix = std::vector<std::vector<Cost>>;
 using Mapping = std::vector<int>;
-
+using Costs = std::vector<Cost>;
+using Rows = std::vector<Row>;
+using Columns = std::vector<Column>;
+const Row NoRow = -1;
+const Column NoColumn = -1;
 const double INF = std::numeric_limits<double>::max();
 
 struct Assignment {
@@ -40,4 +46,5 @@ struct Node {
 std::vector<Assignment> murty(const CostMatrix& costMat, int K);
 
 std::ostream& operator<<(std::ostream&, const Mapping&);
+std::ostream& operator<<(std::ostream&, const Assignment&);
 #endif

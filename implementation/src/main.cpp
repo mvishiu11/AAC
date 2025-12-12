@@ -23,19 +23,25 @@ int maxK(int h, int g)
     long long result = 1;
     for (int i = 0; i < g; ++i)
     {
+        if (result > 2000000000/(h-i)) return 2000000000;
         result *= (h - i);
-        if (result > 2147483647) return 2147483647;
     }
     return (int)result;
 }
 
 int main(int argc, char **argv)
 {
+    bool verbose = false;
     if (argc < 4)
         return -1;
     string algorithm = argv[1];
     string filename = argv[2];
     int N = stoi(argv[3]);
+    if (argc >= 5) {
+      if (argv[4][0]=='v') {
+        verbose = true;
+      }
+    }
     if(algorithm!="exact" && algorithm!="approx"){
         cout<<"Wrong algorithm option provided!"<<endl;
         cout<<algorithm<<endl;
@@ -48,13 +54,13 @@ int main(int argc, char **argv)
     auto graphs = parseInput(filename);
     Graph G = graphs[0];
     Graph H = graphs[1];
-
-    int mK = maxK(H.getVerticesCount(), G.getVerticesCount());
-    int K = H.getVerticesCount()*G.getVerticesCount();
-    K = std::min(K, mK); // In case our K is greater than maximum number of possible mappings
-
-    cout << "### SELECT MAPPINGS ###" << endl;
-    const std::vector<Mapping> mappings = H.selectMappings(G, K);
+    int K = maxK(H.getVerticesCount(), G.getVerticesCount());
+    K = std::min(H.getVerticesCount()*G.getVerticesCount(), K);
+    K = std::min(50*N, K);
+    if (verbose) {
+        cout << "### SELECT MAPPINGS ###" << endl;
+    }
+    const std::vector<Mapping> mappings = H.selectMappings(G, K, verbose);
 
     if (algorithm == "exact")
     {
@@ -73,14 +79,14 @@ int main(int argc, char **argv)
     if (algorithm == "approx")
     {
         cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
-        if (H.hasNSubgraphsApprox(G, K, mappings, N))
+        if (H.hasNSubgraphsApprox(G, K, mappings, N, verbose))
         {
             cout << "APPROXIMATION: YES" << endl;
         }
         else
         {
             cout << "APPROXIMATION: NO" << endl;
-            H.findMinimalExtensionApprox(G, K, mappings, N);
+            H.findMinimalExtensionApprox(G, K, mappings, N, verbose);
         }
     }
 

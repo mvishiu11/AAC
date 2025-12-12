@@ -14,7 +14,7 @@ private:
     int *getVerticesByDegree();
     
 public:
-    std::vector<Mapping> selectMappings(const Graph &G, const int K) const;
+    std::vector<Mapping> selectMappings(const Graph &G, const int K, bool verbose = false) const;
     Graph(int nodes, int **edges) : nodes(nodes), edges(edges) {}
     int getSize() const;
     int getVerticesCount() const { return nodes; }
@@ -37,10 +37,10 @@ public:
         }
         return inDegree;
     }
-    bool hasNSubgraphs(Graph &G, int N = 1);
-    bool hasNSubgraphsApprox(Graph &G, int K, int N = 1);
-    bool hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1);
+    bool hasNSubgraphs(Graph &G, int N = 1, bool verbose = false);
+    bool hasNSubgraphsApprox(Graph &G, int K, int N = 1, bool verbose = false);
+    bool hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
     void findMinimalExtension(Graph &G, int N = 1);
-    void findMinimalExtensionApprox(Graph &G, int K, int N = 1);
-    void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1);
+    void findMinimalExtensionApprox(Graph &G, int K, int N = 1, bool verbose = false);
+    void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
 };

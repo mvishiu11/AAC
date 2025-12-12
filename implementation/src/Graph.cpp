@@ -2,6 +2,7 @@
 #include "../include/Hungarian.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <set>
 #include <vector>
@@ -24,9 +25,9 @@ int Graph::getSize() const
     return size + nodes;
 }
 
-bool Graph::hasNSubgraphs(Graph &G, int N)
+bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
 {
-    std::cout << "### N SUBGRAPH ISOMORPHISMS ###" << endl; 
+    std::cout << "### N SUBGRAPH ISOMORPHISMS CHECK ###" << endl; 
 
     Graph H = *this;
     if (G.getVerticesCount() == 0 || G.getVerticesCount() > H.getVerticesCount())
@@ -37,9 +38,17 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     int Gn = G.getVerticesCount();
 
     int **M = (int **)malloc(sizeof(int *) * Hn);
+    if (M==NULL) {
+        std::cout << "memory allocation error\n";
+        exit(1);
+    }
     for (int i = 0; i < Hn; i++)
     {
         M[i] = (int *)malloc(sizeof(int) * Gn);
+        if (M[i]==NULL) {
+            std::cout << "memory allocation error\n";
+            exit(1);
+        }
     }
 
     for (int i = 0; i < Hn; i++)
@@ -159,12 +168,14 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
         if (t == Gn)
         {
             count++;
-            cout << "Succesful mapping: ";
-            for (int i = 0; i < Gn; ++i)
-            {
-                cout << mapping[i] << " ";
+            if (verbose) {
+                cout << "Succesful mapping: ";
+                for (int i = 0; i < Gn; ++i)
+                {
+                    cout << mapping[i] << " ";
+                }
+                cout << endl;
             }
-            cout << endl;
             if (count >= N)
                 return true;
 
@@ -226,11 +237,11 @@ bool Graph::hasNSubgraphs(Graph &G, int N)
     return result;
 }
 
-bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N)
+bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, bool verbose)
 {
     std::cout << "### N SUBGRAPH ISOMORPHISMS APPROXIMATION ###" << endl; 
     // Host graph is "this"; pattern graph is G
-    Graph H = *this;
+    Graph &H = *this;
 
     const int m = G.getVerticesCount(); // rows (pattern vertices)
     const int n = H.getVerticesCount(); // cols (host vertices)
@@ -244,7 +255,6 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
     for (int k = 0; k < K; ++k)
     {
         vector<int> mapping = mappings[k];
-
         // Enforce injectivity (no two pattern vertices map to the same host vertex)
         vector<int> used(n, 0);
         bool injective = true;
@@ -268,7 +278,9 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
 
         if (G.detectIsomorphism(H, mapping))
         {
-            cout << "isomorphism #" << total << ": " << mapping << '\n';
+            if (verbose) {
+                cout << "isomorphism #" << total << ": " << mapping << '\n';
+            }
             total += 1;
             if (total >= N)
             {
@@ -280,7 +292,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
     return false;
 }
 
-bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N)
+bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N, bool verbose)
 {
     Graph H = *this;
 
@@ -292,7 +304,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N)
         return false;
 
     vector<Mapping> mappings = H.selectMappings(G, K);
-    return hasNSubgraphsApprox(G, K, mappings, N);
+    return hasNSubgraphsApprox(G, K, mappings, N, verbose);
 }
 
 int *Graph::getVerticesByDegree()
@@ -455,6 +467,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
     cout << "Best cost: " << bestCost << endl;
 
+    cout << "Extension Matrix: " << endl;
     for (int a = 0; a < Hn; a++)
     {
         for (int b = 0; b < Hn; b++)
@@ -465,7 +478,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
     }
 }
 
-void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N)
+void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, bool verbose)
 {
     std::cout << "### MINIMAL EXTENSION APPROXIMATION ###" << endl; 
     Graph H = *this;
@@ -478,10 +491,10 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
     vector<bool> is_isomorphism(mappings.size());
     int total = 0;
     std::transform(mappings.begin(),mappings.end(), is_isomorphism.begin(),
-        [&G,&H,&total](auto it){
+        [&G,&H,&total, verbose](auto it){
             if (G.detectIsomorphism(H, it)) {
                 total += 1;
-                cout << "isomorphism #" << total << ": " << it << '\n';
+                if (verbose) cout << "isomorphism #" << total << ": " << it << '\n';
                 return true;
             }
             return false;
@@ -522,7 +535,7 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
             continue;
         }
         total+=1;
-        cout << "extension #" << total << ": " << mapping << '\n';
+        if (verbose) cout << "extension #" << total << ": " << mapping << '\n';
         vector<vector<int>> current_edgeset = H.constructEdgeSet(G, mapping);
         AdjMatrixAdd(all_Edgesets, current_edgeset);
 
@@ -550,11 +563,11 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
     }
 }
 
-void Graph::findMinimalExtensionApprox(Graph &G, int K, int N)
+void Graph::findMinimalExtensionApprox(Graph &G, int K, int N, bool verbose)
 {
     Graph H = *this;
     vector<Mapping> mappings = H.selectMappings(G, K);
-    return findMinimalExtensionApprox(G, K, mappings, N);
+    return findMinimalExtensionApprox(G, K, mappings, N, verbose);
 }
 
 bool Graph::detectIsomorphism(Graph &hostGraph, const vector<int> &vertexMapping)
@@ -626,7 +639,7 @@ vector<vector<double>> Graph::computeVertexMappingCostMatrix(const Graph &hostGr
     return cost;
 }
 
-vector<Mapping> Graph::selectMappings(const Graph &G, const int K) const
+vector<Mapping> Graph::selectMappings(const Graph &G, const int K, const bool verbose) const
 {
     const Graph& H = *this;
     const int m = G.getVerticesCount(); // rows (pattern vertices)
@@ -642,13 +655,15 @@ vector<Mapping> Graph::selectMappings(const Graph &G, const int K) const
     vector<Mapping> mappings(K);
     for (size_t i = 0; i<x.size(); i++) {
         auto &a = x[i];
-        cout << "assignment #" << i << ": ";
-        for (size_t j = 0; j<a.mapping.size(); j++) {
-            cout << a.mapping[j] << ' ';
+        if (verbose) {
+            cout << "assignment #" << i << ": ";
+            for (size_t j = 0; j<a.mapping.size(); j++) {
+                cout << a.mapping[j] << ' ';
+            }
+            cout << "/ " << a.cost << endl;
         }
-        cout << "/ " << a.cost << endl;
         mappings[i]=a.mapping;
-    }    
+    }
 
     return mappings;
 }
