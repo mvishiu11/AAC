@@ -1,8 +1,7 @@
 #include "../include/Graph.hpp"
 #include "../include/Hungarian.hpp"
-
+#include <iostream>
 #include <algorithm>
-#include <cstddef>
 #include <functional>
 #include <set>
 #include <vector>
@@ -402,7 +401,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
     DFS(0);
 
     int counter = 0;
-    int bestCost = __INT_MAX__;
+    int bestCost = INT_MAX;
     vector<vector<int>> bestEdgeSet(Hn, vector<int>(Hn, 0));
     vector<int> usedInSum(N, -1);
     vector<vector<int>> sum(Hn, vector<int>(Hn, 0));

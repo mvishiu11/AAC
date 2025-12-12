@@ -31,3 +31,13 @@ Example:
 ```
 
 Where column index represents source of edge, and row index represents destination of edge.
+
+To compile, run:
+
+PS C:\Users\<user>\Documents\GitHub\AAC> cmake --build implementation/build
+Wersja programu MSBuild 18.0.5+e22287bf1 dla .NET Framework
+
+  Hungarian.cpp
+  main.vcxproj -> C:\Users\<user>\Documents\GitHub\AAC\implementation\build\Debug\main.exe
+  Building Custom Rule C:/Users/remek/Documents/GitHub/AAC/implementation/CMakeLists.txt
+PS C:\Users\<user>\Documents\GitHub\AAC> 

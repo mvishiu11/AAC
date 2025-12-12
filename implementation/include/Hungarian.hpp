@@ -1,6 +1,5 @@
 #ifndef H_HUNGARIAN
 #define H_HUNGARIAN
-#include <bits/stdc++.h>
 #include <limits>
 #include <ostream>
 #include <vector>
