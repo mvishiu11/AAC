@@ -57,15 +57,10 @@ int main(int argc, char **argv)
     int K = maxK(H.getVerticesCount(), G.getVerticesCount());
     K = std::min(H.getVerticesCount()*G.getVerticesCount(), K);
     K = std::min(50*N, K);
-    if (verbose) {
-        cout << "### SELECT MAPPINGS ###" << endl;
-    }
-    const std::vector<Mapping> mappings = H.selectMappings(G, K, verbose);
-
     if (algorithm == "exact")
     {
         cout<<"\n ===== EXACT ALGORITHMS ===== \n"<<endl;
-        if (H.hasNSubgraphs(G, N))
+        if (H.hasNSubgraphs(G, N, verbose))
         {
             cout << "EXACT: YES" << endl;
         }
@@ -78,6 +73,11 @@ int main(int argc, char **argv)
 
     if (algorithm == "approx")
     {
+        if (verbose) {
+            cout << "### SELECT MAPPINGS ###" << endl;
+        }
+        const std::vector<Mapping> mappings = H.selectMappings(G, K, verbose);
+
         cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
         if (H.hasNSubgraphsApprox(G, K, mappings, N, verbose))
         {
