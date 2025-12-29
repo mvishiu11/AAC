@@ -1,14 +1,17 @@
 #include <algorithm>
+#include <cstddef>
+#include <ostream>
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
 #include "../include/Graph.hpp"
+#include "../include/TUI.hpp"
 
 using namespace std;
 
-Graph *parseInput(string filename);
+std::pair<Graph, Graph> parseInput(string filename);
 Graph createGraphFromFile(ifstream &file);
 
 struct CliFlags {
@@ -44,6 +47,11 @@ int maxK(int h, int g)
         result *= (h - i);
     }
     return (int)result;
+}
+
+void usage(char *name) {
+    std::cout << "Usage: " << name << " <exact|approx> <path/to/input> <N>" << std::endl;
+    exit(-1);
 }
 
 int main(int argc, char **argv)
@@ -192,20 +200,26 @@ int main(int argc, char **argv)
         return -1;
     }
 
+    auto graphs = parseInput(filename);
+    Graph G = graphs.first;
+    Graph H = graphs.second;
+    TUI::State state(G,H);
+    TUI::TUI(state);
+    return 0;
     int K = maxK(H.getVerticesCount(), G.getVerticesCount());
     K = std::min(H.getVerticesCount() * G.getVerticesCount(), K);
     K = std::min(50 * N, K);
 
     if (mode == "exact")
     {
-        cout<<"\n ===== EXACT ALGORITHMS ===== \n"<<endl;
+        //std::cout<<"\n ===== EXACT ALGORITHMS ===== \n"<<endl;
         if (H.hasNSubgraphs(G, N, verbose))
         {
-            cout << "EXACT: YES" << endl;
+            //std::cout << "EXACT: YES" << endl;
         }
         else
         {
-            cout << "EXACT: NO" << endl;
+            //std::cout << "EXACT: NO" << endl;
             H.findMinimalExtension(G, N);
         }
     }
@@ -213,18 +227,18 @@ int main(int argc, char **argv)
     if (mode == "approx")
     {
         if (verbose) {
-            cout << "### SELECT MAPPINGS ###" << endl;
+            //std::cout << "### SELECT MAPPINGS ###" << endl;
         }
         const std::vector<Mapping> mappings = H.selectMappings(G, K, verbose);
 
-        cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
+        //std::cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
         if (H.hasNSubgraphsApprox(G, K, mappings, N, verbose))
         {
-            cout << "APPROXIMATION: YES" << endl;
+            //std::cout << "APPROXIMATION: YES" << endl;
         }
         else
         {
-            cout << "APPROXIMATION: NO" << endl;
+            //std::cout << "APPROXIMATION: NO" << endl;
             H.findMinimalExtensionApprox(G, K, mappings, N, verbose);
         }
     }
@@ -232,42 +246,35 @@ int main(int argc, char **argv)
     return 0;
 }
 
-Graph *parseInput(string filename)
+std::pair<Graph,Graph> parseInput(string filename)
 {
     ifstream file(filename);
 
     if (!file)
     {
         cerr << "Error opening file!" << endl;
-        return nullptr;
+        exit(-1);
     }
 
     Graph G = createGraphFromFile(file);
     Graph H = createGraphFromFile(file);
-
-    Graph *graphs = (Graph *)malloc(2 * sizeof(Graph));
-    graphs[0] = G;
-    graphs[1] = H;
-    string line;
-    return graphs;
+    return {G, H};
 }
 
 Graph createGraphFromFile(ifstream &file)
 {
-    string line;
-    getline(file, line);
-    int nodes = stoi(line);
-    int **edges = new int *[nodes];
+    //getline(file, line);
+    int nodes;// = stoi(line);
+    file >> nodes;
+    std::vector<std::vector<int>> edges(static_cast<size_t>(nodes), std::vector<int>(nodes, 0));
     for (int i = 0; i < nodes; i++)
     {
-        getline(file, line);
-        istringstream iss(line);
-        edges[i] = new int[nodes];
         string word;
         int j = 0;
-        while (iss >> word)
+        while (j < nodes)
         {
-            edges[i][j++] = stoi(word);
+            file >> edges[i][j];
+            j += 1;
         }
     }
     Graph graph(nodes, edges);

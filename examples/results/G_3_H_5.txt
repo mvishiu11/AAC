@@ -1,0 +1,26 @@
+
+ ===== EXACT ALGORITHMS ===== 
+
+### N SUBGRAPH ISOMORPHISMS CHECK ###
+EXACT: NO
+### MINIMAL EXTENSION ###
+Best cost: 2
+Extension Matrix: 
+0 0 0 0 0 
+0 0 0 0 0 
+0 0 0 0 0 
+2 0 0 0 0 
+0 0 0 0 0 
+
+ ===== APPROXIMATE ALGORITHMS ===== 
+
+### N SUBGRAPH ISOMORPHISMS APPROXIMATION ###
+APPROXIMATION: NO
+### MINIMAL EXTENSION APPROXIMATION ###
+Best cost: 5
+Extension Matrix: 
+0 0 0 2 0 
+0 0 0 0 0 
+1 0 0 0 0 
+2 0 0 0 0 
+0 0 0 0 0 

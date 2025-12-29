@@ -7,7 +7,7 @@ class Graph
 {
 private:
     int nodes;
-    int **edges;
+    std::vector<std::vector<int>> edges;
     bool detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping);
     CostMatrix computeVertexMappingCostMatrix(const Graph &hostGraph) const;
     std::vector<std::vector<int>> constructEdgeSet(const Graph &G, Mapping mapping) const;
@@ -37,7 +37,7 @@ public:
     };
 
     std::vector<Mapping> selectMappings(const Graph &G, const int K, bool verbose = false) const;
-    Graph(int nodes, int **edges) : nodes(nodes), edges(edges) {}
+    Graph(int nodes, std::vector<std::vector<int>> edges) : nodes(nodes), edges(edges) {}
     int getSize() const;
     int getVerticesCount() const { return nodes; }
     int getMultiplicity(int v, int w) const { return edges[w][v]; }
@@ -66,5 +66,6 @@ public:
     void findMinimalExtensionApprox(Graph &G, int K, int N = 1, bool verbose = false);
     void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
     GedResult gedApprox(const Graph &other, int K, bool buildPath = false, bool verbose = false) const;
+    const std::vector<std::vector<int>> &Edges() const;
     GedResult gedExact(const Graph &other, bool buildPath = false, bool verbose = false, long long maxStates = 5000000) const;
 };

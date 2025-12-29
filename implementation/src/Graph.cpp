@@ -1,5 +1,6 @@
 #include "../include/Graph.hpp"
 #include "../include/Hungarian.hpp"
+#include <climits>
 #include <iostream>
 #include <algorithm>
 #include <functional>
@@ -28,7 +29,7 @@ int Graph::getSize() const
 
 bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
 {
-    std::cout << "### N SUBGRAPH ISOMORPHISMS CHECK ###" << endl; 
+    ////std::cout << "### N SUBGRAPH ISOMORPHISMS CHECK ###" << endl; 
 
     Graph H = *this;
     if (G.getVerticesCount() == 0 || G.getVerticesCount() > H.getVerticesCount())
@@ -40,14 +41,14 @@ bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
 
     int **M = (int **)malloc(sizeof(int *) * Hn);
     if (M==NULL) {
-        std::cout << "memory allocation error\n";
+        //std::cout << "memory allocation error\n";
         exit(1);
     }
     for (int i = 0; i < Hn; i++)
     {
         M[i] = (int *)malloc(sizeof(int) * Gn);
         if (M[i]==NULL) {
-            std::cout << "memory allocation error\n";
+            //std::cout << "memory allocation error\n";
             exit(1);
         }
     }
@@ -170,12 +171,12 @@ bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
         {
             count++;
             if (verbose) {
-                cout << "Succesful mapping: ";
+                //std::cout << "Succesful mapping: ";
                 for (int i = 0; i < Gn; ++i)
                 {
-                    cout << mapping[i] << " ";
+                    //std::cout << mapping[i] << " ";
                 }
-                cout << endl;
+                //std::cout << endl;
             }
             if (count >= N)
                 return true;
@@ -240,7 +241,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
 
 bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, bool verbose)
 {
-    std::cout << "### N SUBGRAPH ISOMORPHISMS APPROXIMATION ###" << endl; 
+    //std::cout << "### N SUBGRAPH ISOMORPHISMS APPROXIMATION ###" << endl; 
     // Host graph is "this"; pattern graph is G
     Graph &H = *this;
 
@@ -280,7 +281,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
         if (G.detectIsomorphism(H, mapping))
         {
             if (verbose) {
-                cout << "isomorphism #" << total << ": " << mapping << '\n';
+                //std::cout << "isomorphism #" << total << ": " << mapping << '\n';
             }
             total += 1;
             if (total >= N)
@@ -338,7 +339,7 @@ int *Graph::getVerticesByDegree()
 
 void Graph::findMinimalExtension(Graph &G, int N)
 {
-    std::cout << "### MINIMAL EXTENSION ###" << endl; 
+    //std::cout << "### MINIMAL EXTENSION ###" << endl; 
 
     Graph H = *this;
 
@@ -466,22 +467,22 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
     EdgeDfs(0);
 
-    cout << "Best cost: " << bestCost << endl;
+    //std::cout << "Best cost: " << bestCost << endl;
 
-    cout << "Extension Matrix: " << endl;
+    //std::cout << "Extension Matrix: " << endl;
     for (int a = 0; a < Hn; a++)
     {
         for (int b = 0; b < Hn; b++)
         {
-            cout << bestEdgeSet[b][a] << " ";
+            //std::cout << bestEdgeSet[b][a] << " ";
         }
-        cout << endl;
+        //std::cout << endl;
     }
 }
 
 void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, bool verbose)
 {
-    std::cout << "### MINIMAL EXTENSION APPROXIMATION ###" << endl; 
+    //std::cout << "### MINIMAL EXTENSION APPROXIMATION ###" << endl; 
     Graph H = *this;
 
     int Hn = H.getVerticesCount();
@@ -495,7 +496,7 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
         [&G,&H,&total, verbose](auto it){
             if (G.detectIsomorphism(H, it)) {
                 total += 1;
-                if (verbose) cout << "isomorphism #" << total << ": " << it << '\n';
+                // if (verbose) std::cout << "isomorphism #" << total << ": " << it << '\n';
                 return true;
             }
             return false;
@@ -536,7 +537,7 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
             continue;
         }
         total+=1;
-        if (verbose) cout << "extension #" << total << ": " << mapping << '\n';
+        // if (verbose) std::cout << "extension #" << total << ": " << mapping << '\n';
         vector<vector<int>> current_edgeset = H.constructEdgeSet(G, mapping);
         AdjMatrixAdd(all_Edgesets, current_edgeset);
 
@@ -550,17 +551,17 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
     for (int a = 0; a < Hn; a++)
         for (int b = 0; b < Hn; b++)
             cost += all_Edgesets[a][b];
-    cout << "Best cost: " << cost << endl;
+    //std::cout << "Best cost: " << cost << endl;
 
-    cout << "Extension Matrix: " << endl;
+    //std::cout << "Extension Matrix: " << endl;
 
     for (int a = 0; a < Hn; a++)
     {
         for (int b = 0; b < Hn; b++)
         {
-            cout << all_Edgesets[b][a] << " ";
+            //std::cout << all_Edgesets[b][a] << " ";
         }
-        cout << endl;
+        //std::cout << endl;
     }
 }
 
@@ -657,11 +658,11 @@ vector<Mapping> Graph::selectMappings(const Graph &G, const int K, const bool ve
     for (size_t i = 0; i<x.size(); i++) {
         auto &a = x[i];
         if (verbose) {
-            cout << "assignment #" << i << ": ";
+            //std::cout << "assignment #" << i << ": ";
             for (size_t j = 0; j<a.mapping.size(); j++) {
-                cout << a.mapping[j] << ' ';
+                //std::cout << a.mapping[j] << ' ';
             }
-            cout << "/ " << a.cost << endl;
+            //std::cout << "/ " << a.cost << endl;
         }
         mappings[i]=a.mapping;
     }
@@ -1135,4 +1136,8 @@ Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbos
             res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
     }
     return res;
+}
+
+const std::vector<std::vector<int>> &Graph::Edges() const {
+    return edges;
 }
