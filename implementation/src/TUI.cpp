@@ -68,7 +68,7 @@ ftxui::Table Matrix(const std::vector<std::vector<int>> &matrix, std::function<f
 }
 
 ftxui::Component MatrixC(std::string &label, const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
-    return ftxui::Renderer([&label, &matrix, &st]{
+    return ftxui::Renderer([&label, &matrix, st]{
         auto m = Matrix(matrix, st);
         return window(ftxui::text(label),m.Render());
     });
