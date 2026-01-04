@@ -19,14 +19,20 @@ def ensure_dir(path):
         os.makedirs(path)
 
 def generate_random_multigraph(n, density, max_multiplicity, seed=None):
+    """Generate a random DIRECTED multigraph.
+    
+    For each ordered pair (i, j) where i != j, with probability 'density',
+    add between 1 and max_multiplicity directed edges from i to j.
+    Self-loops (i -> i) are also possible.
+    """
     if seed is not None:
         random.seed(seed)
     
-    G = nx.MultiGraph()
+    G = nx.MultiDiGraph()  # Directed multigraph
     G.add_nodes_from(range(n))
     
     for i in range(n):
-        for j in range(i, n):
+        for j in range(n):  # All pairs including i==j for self-loops
             if random.random() < density:
                 w = random.randint(1, max_multiplicity)
                 for _ in range(w):
@@ -34,15 +40,17 @@ def generate_random_multigraph(n, density, max_multiplicity, seed=None):
     return G
 
 def save_graph_to_file(G, H, filename):
+    """Save directed multigraphs G and H to file.
+    
+    Format: adjacency matrix where M[i][j] = number of directed edges from i to j.
+    """
     with open(filename, 'w') as f:
         # Write G
         n = G.number_of_nodes()
         f.write(f"{n}\n")
         adj = [[0] * n for _ in range(n)]
         for u, v in G.edges():
-            adj[u][v] += 1
-            if u != v:
-                adj[v][u] += 1
+            adj[u][v] += 1  # Directed: only u -> v
         
         for row in adj:
             f.write(" ".join(map(str, row)) + "\n")
@@ -52,90 +60,193 @@ def save_graph_to_file(G, H, filename):
         f.write(f"{n}\n")
         adj = [[0] * n for _ in range(n)]
         for u, v in H.edges():
-            adj[u][v] += 1
-            if u != v:
-                adj[v][u] += 1
+            adj[u][v] += 1  # Directed: only u -> v
         
         for row in adj:
             f.write(" ".join(map(str, row)) + "\n")
 
 def visualize_graph(G, title, filename):
-    plt.figure(figsize=(6, 6))
+    """Visualize a directed multigraph with arrows showing direction (paper-ready)."""
+    plt.figure(figsize=(8, 8))
     pos = nx.circular_layout(G)
-    
-    # Draw nodes
-    nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=500)
-    nx.draw_networkx_labels(G, pos)
-    
-    # Draw edges with curvature for multigraphs
     ax = plt.gca()
-    for u, v, key, data in G.edges(keys=True, data=True):
-        rad = 0.1 * (key + 1)
-        if key % 2 == 1: rad = -rad
+    
+    # Draw nodes - larger for clarity
+    nx.draw_networkx_nodes(G, pos, node_color='#87CEEB', node_size=900, 
+                          edgecolors='black', linewidths=2, ax=ax)
+    nx.draw_networkx_labels(G, pos, font_size=14, font_weight='bold', ax=ax)
+    
+    # Draw directed edges with curvature for multigraphs
+    for u, v, key in G.edges(keys=True):
+        rad = 0.12 + 0.1 * key
         
-        nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], connectionstyle=f'arc3, rad={rad}', ax=ax)
+        nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], 
+                               connectionstyle=f'arc3, rad={rad}',
+                               arrows=True, arrowstyle='-|>', arrowsize=20,
+                               width=2, edge_color='#333333',
+                               min_source_margin=18, min_target_margin=18, ax=ax)
         
-    plt.title(title)
+    plt.title(title, fontsize=18, fontweight='bold', pad=15)
     plt.axis('off')
-    plt.savefig(filename)
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close()
 
 def parse_extension_matrix(output_str, n):
+    """Parse the extension matrix from algorithm output.
+    
+    The matrix appears after 'Best cost:' line. Format varies slightly:
+    - Exact: matrix lines directly after 'Best cost: X'
+    - Approx: matrix lines after 'Extension Matrix:' header
+    
+    The matrix is n x n where n is the size of H (host graph).
+    """
     matrix = []
     lines = output_str.split('\n')
-    reading = False
-    for line in lines:
-        if "Extension Matrix:" in line:
-            reading = True
-            continue
-        if reading and line.strip():
+    
+    # Find where the matrix starts
+    start_idx = -1
+    for i, line in enumerate(lines):
+        if "Best cost:" in line:
+            # Matrix starts on the next line (or after "Extension Matrix:" for approx)
+            start_idx = i + 1
+            break
+    
+    if start_idx == -1:
+        return matrix
+    
+    # Skip "Extension Matrix:" header if present
+    if start_idx < len(lines) and "Extension Matrix" in lines[start_idx]:
+        start_idx += 1
+    
+    # Read matrix rows
+    for i in range(start_idx, min(start_idx + n, len(lines))):
+        line = lines[i].strip()
+        if line:
             try:
-                row = list(map(int, line.strip().split()))
+                row = list(map(int, line.split()))
                 if len(row) == n:
                     matrix.append(row)
-            except:
-                pass
+                elif len(row) > 0:
+                    # Might be end of matrix
+                    break
+            except ValueError:
+                break
+    
     return matrix
 
 def visualize_extension(H, extension_matrix, title, filename):
-    # Create a copy of H to add extension edges
-    H_ext = H.copy()
+    """Visualize the host graph H with extension edges highlighted as a DIRECTED multigraph.
+    
+    Paper-ready visualization with:
+    - Original edges: gray arrows, semi-transparent
+    - Added edges: red dashed arrows, with direction clearly shown
+    - The extension matrix M[i][j] represents directed edges from i to j
+    """
     n = H.number_of_nodes()
     
-    # Add edges from extension matrix
-    # Matrix indices correspond to H nodes
-    added_edges = []
+    plt.figure(figsize=(10, 10))
+    pos = nx.circular_layout(H)
+    ax = plt.gca()
+    
+    # Draw nodes - larger for paper clarity
+    nx.draw_networkx_nodes(H, pos, node_color='#90EE90', node_size=1000, 
+                          edgecolors='#2E8B57', linewidths=2.5, ax=ax)
+    nx.draw_networkx_labels(H, pos, font_size=16, font_weight='bold', ax=ax)
+    
+    # Draw original edges (gray) as directed arrows with curvature for multigraphs
+    for u, v, key in H.edges(keys=True):
+        rad = 0.12 + 0.1 * key
+        nx.draw_networkx_edges(H, pos, edgelist=[(u, v)], 
+                               connectionstyle=f'arc3, rad={rad}',
+                               edge_color='#666666', alpha=0.5, width=2, 
+                               arrows=True, arrowstyle='-|>', arrowsize=18,
+                               min_source_margin=20, min_target_margin=20, ax=ax)
+    
+    # Collect ALL directed edges from the extension matrix (not just upper triangle)
+    # M[i][j] = number of directed edges to add FROM i TO j
+    added_edges = {}  # (i, j) -> count (directed: i -> j)
+    total_cost = 0
+    
     if len(extension_matrix) == n:
         for i in range(n):
-            for j in range(i, n): # Undirected/Symmetric assumption for visualization
+            for j in range(n):
                 count = extension_matrix[i][j]
                 if count > 0:
-                    for _ in range(count):
-                        H_ext.add_edge(i, j)
-                        added_edges.append((i, j))
+                    added_edges[(i, j)] = count
+                    total_cost += count
     
-    plt.figure(figsize=(6, 6))
-    pos = nx.circular_layout(H_ext)
+    # Draw added directed edges (red, dashed arrows)
+    edge_count_drawn = {}  # Track how many edges drawn between each pair for offset
     
-    # Draw original edges
-    nx.draw_networkx_nodes(H_ext, pos, node_color='lightgreen', node_size=500)
-    nx.draw_networkx_labels(H_ext, pos)
-    
-    # Draw original edges (black)
-    original_edges = [(u, v) for u, v, k in H.edges(keys=True)]
-    ax = plt.gca()
-    for u, v in original_edges:
-        nx.draw_networkx_edges(H_ext, pos, edgelist=[(u, v)], edge_color='black', alpha=0.3, ax=ax)
-
-    # Draw new edges (red, dashed)
-    # Note: This simple visualization might overlap multiple added edges
-    # For a cleaner look, we just draw one red line per pair if edges were added
-    added_pairs = list(set(added_edges))
-    nx.draw_networkx_edges(H_ext, pos, edgelist=added_pairs, edge_color='red', style='dashed', width=2, ax=ax)
+    for (u, v), count in added_edges.items():
+        # Get existing count for offset calculation
+        pair_key = (min(u, v), max(u, v))
+        existing = edge_count_drawn.get(pair_key, 0)
         
-    plt.title(title)
+        for k in range(count):
+            if u == v:
+                # Self-loop
+                loop_rad = 0.4 + 0.15 * k
+                nx.draw_networkx_edges(H, pos, edgelist=[(u, v)],
+                                       connectionstyle=f'arc3, rad={loop_rad}',
+                                       edge_color='#DC143C', style='dashed', 
+                                       width=3, alpha=0.9,
+                                       arrows=True, arrowstyle='-|>', arrowsize=22,
+                                       min_source_margin=20, min_target_margin=20, ax=ax)
+            else:
+                # Regular directed edge - use curvature to separate multiple edges
+                base_rad = 0.18
+                edge_idx = existing + k
+                rad = base_rad * (1 + edge_idx * 0.5)
+                # Alternate curvature direction for edges in opposite directions
+                if u > v:
+                    rad = -rad
+                
+                nx.draw_networkx_edges(H, pos, edgelist=[(u, v)],
+                                       connectionstyle=f'arc3, rad={rad}',
+                                       edge_color='#DC143C', style='dashed', 
+                                       width=3, alpha=0.9,
+                                       arrows=True, arrowstyle='-|>', arrowsize=22,
+                                       min_source_margin=20, min_target_margin=20, ax=ax)
+        
+        edge_count_drawn[pair_key] = existing + count
+    
+    # Add edge labels showing multiplicity for added edges (only if > 1)
+    for (u, v), count in added_edges.items():
+        if count > 1 and u != v:
+            # Calculate label position (midpoint with offset)
+            x = (pos[u][0] + pos[v][0]) / 2
+            y = (pos[u][1] + pos[v][1]) / 2
+            # Offset perpendicular to edge
+            dx = pos[v][0] - pos[u][0]
+            dy = pos[v][1] - pos[u][1]
+            length = (dx**2 + dy**2)**0.5
+            if length > 0:
+                offset = 0.1 if u < v else -0.1
+                x += -dy/length * offset
+                y += dx/length * offset
+            ax.text(x, y, f"×{count}", fontsize=12, fontweight='bold', color='#8B0000',
+                   ha='center', va='center',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                            edgecolor='#DC143C', alpha=0.95, linewidth=1.5))
+    
+    # Paper-ready legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color='#666666', alpha=0.6, linewidth=3, 
+               marker='>', markersize=12, label='Original edges'),
+        Line2D([0], [0], color='#DC143C', linewidth=3, linestyle='--',
+               marker='>', markersize=12, label='Added edges')
+    ]
+    ax.legend(handles=legend_elements, loc='upper left', fontsize=14, 
+             framealpha=0.95, edgecolor='black', fancybox=True)
+    
+    # Clean title with cost info
+    plt.title(title, fontsize=20, fontweight='bold', pad=15)
     plt.axis('off')
-    plt.savefig(filename)
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close()
 
 def run_single_experiment(algo, G, H, temp_file, n_mappings=1):
@@ -336,28 +447,44 @@ def run_suite(experiments=None):
     # --- Experiment 4: Visual Comparison (Exact vs Approx) ---
     if experiments is None or "visual" in experiments:
         print("Running Visual Comparison...")
-        # Generate a single interesting case
-        size_vis = 7
-        G_vis = generate_random_multigraph(size_vis, 0.6, 3, seed=42)
-        H_vis = generate_random_multigraph(size_vis + 2, 0.6, 3, seed=123)
+        # Use smaller, simpler graphs for clearer visualization of directed edges
+        size_vis = 4  # Small pattern graph
+        G_vis = generate_random_multigraph(size_vis, 0.4, 2, seed=42)  # Sparser, fewer multi-edges
+        H_vis = generate_random_multigraph(size_vis + 2, 0.3, 2, seed=123)  # 6-node host graph
         
-        visualize_graph(G_vis, "Pattern Graph G", os.path.join(viz_dir, "comparison_G.png"))
-        visualize_graph(H_vis, "Host Graph H", os.path.join(viz_dir, "comparison_H.png"))
+        print(f"  G: {G_vis.number_of_nodes()} nodes, {G_vis.number_of_edges()} directed edges")
+        print(f"  H: {H_vis.number_of_nodes()} nodes, {H_vis.number_of_edges()} directed edges")
+        
+        visualize_graph(G_vis, f"Pattern Graph G ({G_vis.number_of_nodes()} nodes, {G_vis.number_of_edges()} edges)", 
+                       os.path.join(viz_dir, "comparison_G.png"))
+        visualize_graph(H_vis, f"Host Graph H ({H_vis.number_of_nodes()} nodes, {H_vis.number_of_edges()} edges)", 
+                       os.path.join(viz_dir, "comparison_H.png"))
         
         # Run Exact
         res_exact = run_single_experiment("exact", G_vis, H_vis, temp_file)
         if res_exact["success"]:
+            print(f"  Exact cost: {res_exact['cost']}")
             ext_matrix = parse_extension_matrix(res_exact["output"], H_vis.number_of_nodes())
+            print(f"  Exact extension matrix ({len(ext_matrix)}x{len(ext_matrix[0]) if ext_matrix else 0}):")
+            for row in ext_matrix:
+                print(f"    {row}")
             visualize_extension(H_vis, ext_matrix, f"Exact Extension (Cost {res_exact['cost']})", os.path.join(viz_dir, "comparison_Exact.png"))
+        else:
+            print(f"  Exact failed: {res_exact.get('error', 'unknown')}")
 
         # Run Approx
         res_approx = run_single_experiment("approx", G_vis, H_vis, temp_file)
         if res_approx["success"]:
+            print(f"  Approx cost: {res_approx['cost']}")
             ext_matrix = parse_extension_matrix(res_approx["output"], H_vis.number_of_nodes())
+            print(f"  Approx extension matrix ({len(ext_matrix)}x{len(ext_matrix[0]) if ext_matrix else 0}):")
+            for row in ext_matrix:
+                print(f"    {row}")
             visualize_extension(H_vis, ext_matrix, f"Approx Extension (Cost {res_approx['cost']})", os.path.join(viz_dir, "comparison_Approx.png"))
+        else:
+            print(f"  Approx failed: {res_approx.get('error', 'unknown')}")
         
-        # We can't easily visualize the *result* graph without parsing the output matrix
-        # But we can log the costs to compare
+        # Log the costs to compare
         results.append({
             "experiment": "visual_comparison",
             "size_G": size_vis,
