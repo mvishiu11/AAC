@@ -702,6 +702,121 @@ vector<vector<int>> Graph::constructEdgeSet(const Graph &G, Mapping mapping) con
 
 namespace {
 
+    inline int multPad(const Graph& g, const int realN, const int v, const int w)
+    {
+        if (v < 0 || w < 0) return 0;
+        if (v >= realN || w >= realN) return 0;
+        return g.getMultiplicity(v, w);
+    }
+
+    std::vector<int> invertPermutation(const std::vector<int>& f)
+    {
+        std::vector<int> inv(f.size(), -1);
+        for (int i = 0; i < (int)f.size(); ++i)
+        {
+            const int j = f[i];
+            if (j >= 0 && j < (int)f.size()) inv[j] = i;
+        }
+        return inv;
+    }
+
+    long long edgeL1CostPaddedUnderBijection(
+        const Graph& A, const int nA,
+        const Graph& B, const int nB,
+        const std::vector<int>& f)
+    {
+        const int n = (int)f.size();
+        long long cost = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            const int fi = f[i];
+            for (int j = 0; j < n; ++j)
+            {
+                const int fj = f[j];
+                const int a = multPad(A, nA, i, j);
+                const int b = multPad(B, nB, fi, fj);
+                cost += std::llabs((long long)a - (long long)b);
+            }
+        }
+        return cost;
+    }
+
+    void fillMappingAndVertexListsFromBijection(
+        const int nA,
+        const int nB,
+        const std::vector<int>& f,
+        Mapping& outThisToOther,
+        std::vector<int>& insertedVerticesInOther,
+        std::vector<int>& deletedVerticesInThis)
+    {
+        outThisToOther.assign(nA, -1);
+        deletedVerticesInThis.clear();
+        insertedVerticesInOther.clear();
+
+        for (int i = 0; i < nA; ++i)
+        {
+            const int h = f[i];
+            if (h >= 0 && h < nB)
+                outThisToOther[i] = h;
+            else
+            {
+                outThisToOther[i] = -1;
+                deletedVerticesInThis.push_back(i);
+            }
+        }
+
+        const auto inv = invertPermutation(f);
+        for (int h = 0; h < nB; ++h)
+        {
+            const int pre = inv[h];
+            if (pre >= nA) insertedVerticesInOther.push_back(h);
+        }
+    }
+
+    std::vector<Graph::GedEditOp> buildEditPathFromBijection(
+        const Graph& A,
+        const int nA,
+        const Graph& B,
+        const int nB,
+        const std::vector<int>& f)
+    {
+        const int n = (int)f.size();
+        std::vector<Graph::GedEditOp> ops;
+
+        // If A is smaller, add missing vertices first (they are the padded A-vertices).
+        if (nA < nB)
+        {
+            for (int v = nA; v < n; ++v)
+                ops.push_back({Graph::GedEditOp::Type::AddVertex, v, -1, 1});
+        }
+
+        // Edge edits in the current (padded) A vertex indexing.
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < n; ++j)
+            {
+                const int cur = multPad(A, nA, i, j);
+                const int desired = multPad(B, nB, f[i], f[j]);
+                const int delta = desired - cur;
+                if (delta > 0)
+                    ops.push_back({Graph::GedEditOp::Type::AddEdge, i, j, delta});
+                else if (delta < 0)
+                    ops.push_back({Graph::GedEditOp::Type::DelEdge, i, j, -delta});
+            }
+        }
+
+        // If A is larger, delete vertices last (after edges are removed to isolate them).
+        if (nA > nB)
+        {
+            for (int v = 0; v < nA; ++v)
+            {
+                if (f[v] >= nB)
+                    ops.push_back({Graph::GedEditOp::Type::DelVertex, v, -1, 1});
+            }
+        }
+        return ops;
+    }
+
     CostMatrix computeGedVertexCostMatrix(const Graph &small, const Graph &large)
     {
         const int m = small.getVerticesCount();
@@ -722,51 +837,6 @@ namespace {
         return cost;
     }
 
-    std::vector<int> computeUnmatchedVertices(const int largeN, const Mapping &mapSmallToLarge)
-    {
-        std::vector<int> used(largeN, 0);
-        for (int u = 0; u < (int)mapSmallToLarge.size(); ++u)
-        {
-            const int v = mapSmallToLarge[u];
-            if (v >= 0 && v < largeN) used[v] = 1;
-        }
-        std::vector<int> unmatched;
-        for (int v = 0; v < largeN; ++v)
-            if (!used[v]) unmatched.push_back(v);
-
-        return unmatched;
-    }
-
-    long long edgeL1CostEmbedded(const Graph &small, const Graph &large, const Mapping &mapSmallToLarge)
-    {
-        const int m = small.getVerticesCount();
-        const int n = large.getVerticesCount();
-
-        // inverse: large vertex -> small vertex or -1
-        std::vector<int> inv(n, -1);
-        for (int u = 0; u < m; ++u)
-        {
-            const int v = mapSmallToLarge[u];
-            if (v < 0 || v >= n) return LLONG_MAX / 4; // invalid mapping
-            if (inv[v] != -1) return LLONG_MAX / 4;     // not injective
-            inv[v] = u;
-        }
-
-        long long cost = 0;
-        for (int i = 0; i < n; ++i)
-        {
-            for (int j = 0; j < n; ++j)
-            {
-                const int si = inv[i];
-                const int sj = inv[j];
-                const int a = (si != -1 && sj != -1) ? small.getMultiplicity(si, sj) : 0;
-                const int b = large.getMultiplicity(i, j);
-                cost += std::llabs((long long)a - (long long)b);
-            }
-        }
-        return cost;
-    }
-
 } // namespace
 
 Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, bool verbose) const
@@ -776,14 +846,15 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
     const int nB = other.getVerticesCount();
     if (K < 1) K = 1;
 
+    const int nPad = std::max(nA, nB);
+    const long long vertexCost = (long long)std::llabs((long long)nA - (long long)nB);
+
     // Choose orientation for mapping enumeration: smaller -> larger
     const bool aIsSmallerOrEqual = (nA <= nB);
     const Graph &small = aIsSmallerOrEqual ? *this : other;
     const Graph &large = aIsSmallerOrEqual ? other : *this;
-    const int m = small.getVerticesCount();
-    const int n = large.getVerticesCount();
 
-    // Generate K candidate injective mappings using Murty/Hungarian, then score by true GED edge cost.
+    // Generate K candidate injective mappings using Murty/Hungarian, then score by true GED cost.
     CostMatrix cm = computeGedVertexCostMatrix(small, large);
     std::vector<Assignment> candidates = murty(cm, K);
     if (candidates.empty())
@@ -795,13 +866,60 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
 
     long long bestEdge = LLONG_MAX / 4;
     long long bestTotal = LLONG_MAX / 4;
-    Mapping bestMapSmallToLarge;
+    std::vector<int> bestF;
 
     for (size_t i = 0; i < candidates.size(); ++i)
     {
         const Mapping &map = candidates[i].mapping;
-        const long long edgeCost = edgeL1CostEmbedded(small, large, map);
-        const long long vertexCost = (long long)(n - m);
+
+        // Build an explicit bijection f on the padded vertex set of size n.
+        std::vector<int> f(nPad, -1); // this(padded) -> other(padded)
+        if (aIsSmallerOrEqual)
+        {
+            // this == small, other == large
+            std::vector<int> used(nB, 0);
+            for (int u = 0; u < nA; ++u)
+            {
+                const int v = map[u];
+                if (v < 0 || v >= nB) { f.clear(); break; }
+                f[u] = v;
+                used[v] = 1;
+            }
+            if (!f.empty())
+            {
+                int t = nA;
+                for (int v = 0; v < nB; ++v)
+                    if (!used[v]) f[t++] = v;
+            }
+        }
+        else
+        {
+            // this == large, other == small; map is other(u)->this(v)
+            std::vector<int> gToH(nA, -1);
+            std::vector<int> usedG(nA, 0);
+            for (int h = 0; h < nB; ++h)
+            {
+                const int g = map[h];
+                if (g < 0 || g >= nA) { f.clear(); break; }
+                if (usedG[g]) { f.clear(); break; }
+                usedG[g] = 1;
+                gToH[g] = h;
+            }
+            if (!f.empty())
+            {
+                int nextDummy = nB;
+                for (int g = 0; g < nA; ++g)
+                {
+                    if (gToH[g] != -1) f[g] = gToH[g];
+                    else f[g] = nextDummy++;
+                }
+            }
+        }
+
+        if (f.empty())
+            continue;
+
+        const long long edgeCost = edgeL1CostPaddedUnderBijection(*this, nA, other, nB, f);
         const long long total = edgeCost + vertexCost;
 
         if (verbose)
@@ -817,93 +935,163 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
         {
             bestTotal = total;
             bestEdge = edgeCost;
-            bestMapSmallToLarge = map;
+            bestF = f;
         }
     }
 
-    res.vertex_ops = (long long)std::abs(nA - nB);
+    res.vertex_ops = vertexCost;
     res.edge_ops = bestEdge;
     res.total_cost = bestTotal;
-    // Build mapping in "this -> other" direction and optionally construct an edit path.
-    if (aIsSmallerOrEqual)
+    fillMappingAndVertexListsFromBijection(nA, nB, bestF, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+    if (buildPath)
+        res.ops = buildEditPathFromBijection(*this, nA, other, nB, bestF);
+
+    return res;
+}
+
+Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbose, long long maxStates) const
+{
+    GedResult res;
+    const int nA = this->getVerticesCount();
+    const int nB = other.getVerticesCount();
+    const int n = std::max(nA, nB);
+    const long long vertexCost = (long long)std::llabs((long long)nA - (long long)nB);
+
+    // Precompute padded in/out degrees.
+    std::vector<int> outA(n, 0), inA(n, 0), outB(n, 0), inB(n, 0);
+    for (int v = 0; v < n; ++v)
     {
-        // this == small, other == large
-        res.mapping_this_to_other = bestMapSmallToLarge;
-        res.inserted_vertices_in_other = computeUnmatchedVertices(nB, bestMapSmallToLarge);
-
-        if (buildPath)
+        int oA = 0, iA = 0, oB = 0, iB = 0;
+        for (int w = 0; w < n; ++w)
         {
-            // inverse: other vertex -> this vertex (or -1 if inserted)
-            std::vector<int> inv(nB, -1);
-            for (int u = 0; u < nA; ++u) inv[res.mapping_this_to_other[u]] = u;
-
-            // 1) add missing vertices first
-            for (int v : res.inserted_vertices_in_other)
-            {
-                res.ops.push_back({GedEditOp::Type::AddVertex, v, -1, 1});
-            }
-
-            // 2) edge edits in other's vertex space
-            for (int i = 0; i < nB; ++i)
-            {
-                for (int j = 0; j < nB; ++j)
-                {
-                    const int si = inv[i];
-                    const int sj = inv[j];
-                    const int a = (si != -1 && sj != -1) ? this->getMultiplicity(si, sj) : 0;
-                    const int b = other.getMultiplicity(i, j);
-                    const int d = b - a;
-                    if (d > 0)
-                        res.ops.push_back({GedEditOp::Type::AddEdge, i, j, d});
-                    else if (d < 0)
-                        res.ops.push_back({GedEditOp::Type::DelEdge, i, j, -d});
-                }
-            }
+            oA += multPad(*this, nA, v, w);
+            iA += multPad(*this, nA, w, v);
+            oB += multPad(other, nB, v, w);
+            iB += multPad(other, nB, w, v);
         }
-    }
-    else
-    {
-        // this == large, other == small
-        // bestMapSmallToLarge maps: other(u) -> this(v). Convert to partial mapping: this(v) -> other(u)
-        res.mapping_this_to_other.assign(nA, -1);
-        for (int u = 0; u < nB; ++u)
-        {
-            const int v = bestMapSmallToLarge[u];
-            if (v >= 0 && v < nA) res.mapping_this_to_other[v] = u;
-        }
-
-        for (int v = 0; v < nA; ++v)
-            if (res.mapping_this_to_other[v] == -1) res.deleted_vertices_in_this.push_back(v);
-
-        if (buildPath)
-        {
-            // 1) delete/add edges first (so vertices can be isolated before deletion)
-            for (int i = 0; i < nA; ++i)
-            {
-                for (int j = 0; j < nA; ++j)
-                {
-                    const int a = this->getMultiplicity(i, j);
-                    int b = 0;
-                    const int mi = res.mapping_this_to_other[i];
-                    const int mj = res.mapping_this_to_other[j];
-                    if (mi != -1 && mj != -1)
-                        b = other.getMultiplicity(mi, mj);
-
-                    const int d = b - a;
-                    if (d > 0)
-                        res.ops.push_back({GedEditOp::Type::AddEdge, i, j, d});
-                    else if (d < 0)
-                        res.ops.push_back({GedEditOp::Type::DelEdge, i, j, -d});
-                }
-            }
-
-            // 2) now delete vertices that are not mapped
-            for (int v : res.deleted_vertices_in_this)
-            {
-                res.ops.push_back({GedEditOp::Type::DelVertex, v, -1, 1});
-            }
-        }
+        outA[v] = oA; inA[v] = iA;
+        outB[v] = oB; inB[v] = iB;
     }
 
+    std::vector<int> order(n);
+    for (int i = 0; i < n; ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](int a, int b) {
+        return (outA[a] + inA[a]) > (outA[b] + inA[b]);
+    });
+
+    std::vector<int> f(n, -1);
+    std::vector<char> usedH(n, 0);
+
+    long long bestEdge = LLONG_MAX / 4;
+    std::vector<int> bestF;
+    bool stopped = false;
+
+    auto hungarianLB = [&](const std::vector<int>& remG, const std::vector<int>& remH) -> long long {
+        const int r = (int)remG.size();
+        if (r == 0) return 0;
+
+        CostMatrix outCost(r, std::vector<Cost>(r, 0.0));
+        CostMatrix inCost(r, std::vector<Cost>(r, 0.0));
+        for (int i = 0; i < r; ++i)
+        {
+            const int gv = remG[i];
+            for (int j = 0; j < r; ++j)
+            {
+                const int hv = remH[j];
+                outCost[i][j] = (double)std::abs(outA[gv] - outB[hv]);
+                inCost[i][j] = (double)std::abs(inA[gv] - inB[hv]);
+            }
+        }
+
+        const double lbOut = hungarian(outCost).cost;
+        const double lbIn = hungarian(inCost).cost;
+        const long long lbOutLL = (long long)std::floor(lbOut + 1e-9);
+        const long long lbInLL = (long long)std::floor(lbIn + 1e-9);
+        return std::max(lbOutLL, lbInLL);
+    };
+
+    std::function<void(int, long long)> dfs = [&](int depth, long long currentCost) {
+        if (stopped) return;
+        if (res.states_visited >= maxStates)
+        {
+            stopped = true;
+            return;
+        }
+        ++res.states_visited;
+
+        if (depth == n)
+        {
+            if (currentCost < bestEdge)
+            {
+                bestEdge = currentCost;
+                bestF = f;
+            }
+            return;
+        }
+
+        const int gv = order[depth];
+
+        // Remaining-vertices Hungarian degree bound.
+        {
+            std::vector<int> remG;
+            remG.reserve(n - depth);
+            for (int d = depth; d < n; ++d) remG.push_back(order[d]);
+
+            std::vector<int> remH;
+            remH.reserve(n - depth);
+            for (int hv = 0; hv < n; ++hv) if (!usedH[hv]) remH.push_back(hv);
+
+            const long long lb = hungarianLB(remG, remH);
+            if (currentCost + lb >= bestEdge)
+            {
+                ++res.states_pruned;
+                return;
+            }
+        }
+
+        for (int hv = 0; hv < n; ++hv)
+        {
+            if (usedH[hv]) continue;
+            usedH[hv] = 1;
+            f[gv] = hv;
+
+            long long inc = 0;
+            inc += std::llabs((long long)multPad(*this, nA, gv, gv) - (long long)multPad(other, nB, hv, hv));
+            for (int d = 0; d < depth; ++d)
+            {
+                const int gu = order[d];
+                const int hu = f[gu];
+                inc += std::llabs((long long)multPad(*this, nA, gv, gu) - (long long)multPad(other, nB, hv, hu));
+                inc += std::llabs((long long)multPad(*this, nA, gu, gv) - (long long)multPad(other, nB, hu, hv));
+            }
+
+            if (currentCost + inc < bestEdge)
+                dfs(depth + 1, currentCost + inc);
+            else
+                ++res.states_pruned;
+
+            f[gv] = -1;
+            usedH[hv] = 0;
+            if (stopped) return;
+        }
+    };
+
+    if (verbose)
+    {
+        std::cout << "GED exact: n=" << n << " maxStates=" << maxStates << "\n";
+    }
+
+    dfs(0, 0);
+
+    res.complete = !stopped;
+    res.vertex_ops = vertexCost;
+    res.edge_ops = bestEdge;
+    res.total_cost = vertexCost + bestEdge;
+    if (!bestF.empty())
+    {
+        fillMappingAndVertexListsFromBijection(nA, nB, bestF, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+        if (buildPath)
+            res.ops = buildEditPathFromBijection(*this, nA, other, nB, bestF);
+    }
     return res;
 }

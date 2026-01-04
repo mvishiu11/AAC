@@ -17,9 +17,9 @@ public:
     struct GedEditOp {
         enum class Type { AddVertex, DelVertex, AddEdge, DelEdge };
         Type type;
-        int from;
-        int to;
-        int multiplicity;
+        int from = -1;
+        int to = -1;
+        int multiplicity = 1;
     };
     struct GedResult {
         long long total_cost = 0;
@@ -30,6 +30,10 @@ public:
         std::vector<int> inserted_vertices_in_other;
         std::vector<int> deleted_vertices_in_this;
         std::vector<GedEditOp> ops;
+
+        bool complete = true;
+        long long states_visited = 0;
+        long long states_pruned = 0;
     };
 
     std::vector<Mapping> selectMappings(const Graph &G, const int K, bool verbose = false) const;
@@ -62,4 +66,5 @@ public:
     void findMinimalExtensionApprox(Graph &G, int K, int N = 1, bool verbose = false);
     void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
     GedResult gedApprox(const Graph &other, int K, bool buildPath = false, bool verbose = false) const;
+    GedResult gedExact(const Graph &other, bool buildPath = false, bool verbose = false, long long maxStates = 5000000) const;
 };

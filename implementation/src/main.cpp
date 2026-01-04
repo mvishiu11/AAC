@@ -48,21 +48,90 @@ int maxK(int h, int g)
 
 int main(int argc, char **argv)
 {
-    if (argc < 4) return -1;
-        string mode = argv[1];
-        string filename = argv[2];
-        int third = stoi(argv[3]);
-        const CliFlags flags = parseFlags(argc, argv, 4);
-        const bool verbose = flags.verbose;
-    auto graphs = parseInput(filename);
-    Graph G = graphs[0];
-    Graph H = graphs[1];
+    if (argc < 3) return -1;
+
+    string mode = argv[1];
     if (mode == "ged")
     {
-        int K = third;
+        // New forms:
+        //   main ged exact <file> [v] [p]
+        //   main ged approx <file> <K> [v] [p]
+        // Backward-compatible:
+        //   main ged <file> <K> [v] [p]  == approx
+
+        std::string sub = argv[2];
+        std::string filename;
+        int K = 0;
+        CliFlags flags;
+
+        if (sub == "exact")
+        {
+            if (argc < 4) return -1;
+            filename = argv[3];
+            flags = parseFlags(argc, argv, 4);
+        }
+        else if (sub == "approx")
+        {
+            if (argc < 5) return -1;
+            filename = argv[3];
+            K = stoi(argv[4]);
+            flags = parseFlags(argc, argv, 5);
+        }
+        else
+        {
+            // backward-compatible approx
+            if (argc < 4) return -1;
+            filename = argv[2];
+            K = stoi(argv[3]);
+            flags = parseFlags(argc, argv, 4);
+            sub = "approx";
+        }
+
+        const bool verbose = flags.verbose;
+        auto graphs = parseInput(filename);
+        Graph G = graphs[0];
+        Graph H = graphs[1];
+
+        if (sub == "exact")
+        {
+            cout << "\n ===== GRAPH EDIT DISTANCE (EXACT) ===== \n" << endl;
+            auto r = G.gedExact(H, flags.path, verbose);
+
+            cout << "GED: " << r.total_cost
+                 << " (vertex_ops=" << r.vertex_ops
+                 << ", edge_ops=" << r.edge_ops << ")\n";
+            cout << "Mapping (G -> H, -1 means deleted): " << r.mapping_this_to_other << "\n";
+            cout << "Exact: complete=" << (r.complete ? "true" : "false")
+                 << " states_visited=" << r.states_visited
+                 << " states_pruned=" << r.states_pruned << "\n";
+
+            if (!r.inserted_vertices_in_other.empty())
+                cout << "Inserted vertices in H: " << r.inserted_vertices_in_other << "\n";
+            if (!r.deleted_vertices_in_this.empty())
+                cout << "Deleted vertices in G: " << r.deleted_vertices_in_this << "\n";
+
+            if (flags.path)
+            {
+                cout << "\n--- Edit path (aggregated) ---\n";
+                for (const auto &op : r.ops)
+                {
+                    using T = Graph::GedEditOp::Type;
+                    switch (op.type)
+                    {
+                    case T::AddVertex: cout << "addv(" << op.from << ")\n"; break;
+                    case T::DelVertex: cout << "delv(" << op.from << ")\n"; break;
+                    case T::AddEdge:   cout << "adde(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
+                    case T::DelEdge:   cout << "dele(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        // approx
         if (K < 1) K = 1;
 
-        // Hard upper bound on #injective mappings
+        // Hard upper bound on #injective mappings used by the approximation.
         const int smallN = std::min(G.getVerticesCount(), H.getVerticesCount());
         const int largeN = std::max(G.getVerticesCount(), H.getVerticesCount());
         const int maxInjective = maxK(largeN, smallN);
@@ -77,13 +146,9 @@ int main(int argc, char **argv)
         cout << "Mapping (G -> H, -1 means deleted): " << r.mapping_this_to_other << "\n";
 
         if (!r.inserted_vertices_in_other.empty())
-        {
             cout << "Inserted vertices in H: " << r.inserted_vertices_in_other << "\n";
-        }
         if (!r.deleted_vertices_in_this.empty())
-        {
             cout << "Deleted vertices in G: " << r.deleted_vertices_in_this << "\n";
-        }
 
         if (flags.path)
         {
@@ -102,6 +167,17 @@ int main(int argc, char **argv)
         }
         return 0;
     }
+
+    if (argc < 4) return -1;
+
+    string filename = argv[2];
+    int third = stoi(argv[3]);
+    const CliFlags flags = parseFlags(argc, argv, 4);
+    const bool verbose = flags.verbose;
+
+    auto graphs = parseInput(filename);
+    Graph G = graphs[0];
+    Graph H = graphs[1];
     if (mode != "exact" && mode != "approx")
     {
         cout << "Wrong mode provided! Use: exact | approx | ged\n";
