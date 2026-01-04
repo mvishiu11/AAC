@@ -14,6 +14,24 @@ private:
     int *getVerticesByDegree();
     
 public:
+    struct GedEditOp {
+        enum class Type { AddVertex, DelVertex, AddEdge, DelEdge };
+        Type type;
+        int from;
+        int to;
+        int multiplicity;
+    };
+    struct GedResult {
+        long long total_cost = 0;
+        long long vertex_ops = 0;
+        long long edge_ops = 0;
+
+        Mapping mapping_this_to_other;
+        std::vector<int> inserted_vertices_in_other;
+        std::vector<int> deleted_vertices_in_this;
+        std::vector<GedEditOp> ops;
+    };
+
     std::vector<Mapping> selectMappings(const Graph &G, const int K, bool verbose = false) const;
     Graph(int nodes, int **edges) : nodes(nodes), edges(edges) {}
     int getSize() const;
@@ -43,4 +61,5 @@ public:
     void findMinimalExtension(Graph &G, int N = 1);
     void findMinimalExtensionApprox(Graph &G, int K, int N = 1, bool verbose = false);
     void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
+    GedResult gedApprox(const Graph &other, int K, bool buildPath = false, bool verbose = false) const;
 };

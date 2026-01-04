@@ -5,6 +5,8 @@
 #include <functional>
 #include <set>
 #include <vector>
+#include <cmath>
+#include <climits>
 
 using namespace std;
 
@@ -696,4 +698,212 @@ vector<vector<int>> Graph::constructEdgeSet(const Graph &G, Mapping mapping) con
     }
 
     return edgeset;
+}
+
+namespace {
+
+    CostMatrix computeGedVertexCostMatrix(const Graph &small, const Graph &large)
+    {
+        const int m = small.getVerticesCount();
+        const int n = large.getVerticesCount();
+        CostMatrix cost(m, std::vector<Cost>(n, 0.0));
+
+        for (int u = 0; u < m; ++u)
+        {
+            const int in_u = small.getInDegree(u);
+            const int out_u = small.getOutDegree(u);
+            for (int v = 0; v < n; ++v)
+            {
+                const int in_v = large.getInDegree(v);
+                const int out_v = large.getOutDegree(v);
+                cost[u][v] = static_cast<double>(std::abs(in_u - in_v) + std::abs(out_u - out_v));
+            }
+        }
+        return cost;
+    }
+
+    std::vector<int> computeUnmatchedVertices(const int largeN, const Mapping &mapSmallToLarge)
+    {
+        std::vector<int> used(largeN, 0);
+        for (int u = 0; u < (int)mapSmallToLarge.size(); ++u)
+        {
+            const int v = mapSmallToLarge[u];
+            if (v >= 0 && v < largeN) used[v] = 1;
+        }
+        std::vector<int> unmatched;
+        for (int v = 0; v < largeN; ++v)
+            if (!used[v]) unmatched.push_back(v);
+
+        return unmatched;
+    }
+
+    long long edgeL1CostEmbedded(const Graph &small, const Graph &large, const Mapping &mapSmallToLarge)
+    {
+        const int m = small.getVerticesCount();
+        const int n = large.getVerticesCount();
+
+        // inverse: large vertex -> small vertex or -1
+        std::vector<int> inv(n, -1);
+        for (int u = 0; u < m; ++u)
+        {
+            const int v = mapSmallToLarge[u];
+            if (v < 0 || v >= n) return LLONG_MAX / 4; // invalid mapping
+            if (inv[v] != -1) return LLONG_MAX / 4;     // not injective
+            inv[v] = u;
+        }
+
+        long long cost = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < n; ++j)
+            {
+                const int si = inv[i];
+                const int sj = inv[j];
+                const int a = (si != -1 && sj != -1) ? small.getMultiplicity(si, sj) : 0;
+                const int b = large.getMultiplicity(i, j);
+                cost += std::llabs((long long)a - (long long)b);
+            }
+        }
+        return cost;
+    }
+
+} // namespace
+
+Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, bool verbose) const
+{
+    GedResult res;
+    const int nA = this->getVerticesCount();
+    const int nB = other.getVerticesCount();
+    if (K < 1) K = 1;
+
+    // Choose orientation for mapping enumeration: smaller -> larger
+    const bool aIsSmallerOrEqual = (nA <= nB);
+    const Graph &small = aIsSmallerOrEqual ? *this : other;
+    const Graph &large = aIsSmallerOrEqual ? other : *this;
+    const int m = small.getVerticesCount();
+    const int n = large.getVerticesCount();
+
+    // Generate K candidate injective mappings using Murty/Hungarian, then score by true GED edge cost.
+    CostMatrix cm = computeGedVertexCostMatrix(small, large);
+    std::vector<Assignment> candidates = murty(cm, K);
+    if (candidates.empty())
+    {
+        // No feasible assignment (should not happen for m<=n), but keep behavior predictable.
+        res.total_cost = LLONG_MAX / 4;
+        return res;
+    }
+
+    long long bestEdge = LLONG_MAX / 4;
+    long long bestTotal = LLONG_MAX / 4;
+    Mapping bestMapSmallToLarge;
+
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {
+        const Mapping &map = candidates[i].mapping;
+        const long long edgeCost = edgeL1CostEmbedded(small, large, map);
+        const long long vertexCost = (long long)(n - m);
+        const long long total = edgeCost + vertexCost;
+
+        if (verbose)
+        {
+            std::cout << "GED candidate #" << i
+                      << " vertexCost=" << vertexCost
+                      << " edgeCost=" << edgeCost
+                      << " total=" << total
+                      << " mapping=" << map << "\n";
+        }
+
+        if (total < bestTotal)
+        {
+            bestTotal = total;
+            bestEdge = edgeCost;
+            bestMapSmallToLarge = map;
+        }
+    }
+
+    res.vertex_ops = (long long)std::abs(nA - nB);
+    res.edge_ops = bestEdge;
+    res.total_cost = bestTotal;
+    // Build mapping in "this -> other" direction and optionally construct an edit path.
+    if (aIsSmallerOrEqual)
+    {
+        // this == small, other == large
+        res.mapping_this_to_other = bestMapSmallToLarge;
+        res.inserted_vertices_in_other = computeUnmatchedVertices(nB, bestMapSmallToLarge);
+
+        if (buildPath)
+        {
+            // inverse: other vertex -> this vertex (or -1 if inserted)
+            std::vector<int> inv(nB, -1);
+            for (int u = 0; u < nA; ++u) inv[res.mapping_this_to_other[u]] = u;
+
+            // 1) add missing vertices first
+            for (int v : res.inserted_vertices_in_other)
+            {
+                res.ops.push_back({GedEditOp::Type::AddVertex, v, -1, 1});
+            }
+
+            // 2) edge edits in other's vertex space
+            for (int i = 0; i < nB; ++i)
+            {
+                for (int j = 0; j < nB; ++j)
+                {
+                    const int si = inv[i];
+                    const int sj = inv[j];
+                    const int a = (si != -1 && sj != -1) ? this->getMultiplicity(si, sj) : 0;
+                    const int b = other.getMultiplicity(i, j);
+                    const int d = b - a;
+                    if (d > 0)
+                        res.ops.push_back({GedEditOp::Type::AddEdge, i, j, d});
+                    else if (d < 0)
+                        res.ops.push_back({GedEditOp::Type::DelEdge, i, j, -d});
+                }
+            }
+        }
+    }
+    else
+    {
+        // this == large, other == small
+        // bestMapSmallToLarge maps: other(u) -> this(v). Convert to partial mapping: this(v) -> other(u)
+        res.mapping_this_to_other.assign(nA, -1);
+        for (int u = 0; u < nB; ++u)
+        {
+            const int v = bestMapSmallToLarge[u];
+            if (v >= 0 && v < nA) res.mapping_this_to_other[v] = u;
+        }
+
+        for (int v = 0; v < nA; ++v)
+            if (res.mapping_this_to_other[v] == -1) res.deleted_vertices_in_this.push_back(v);
+
+        if (buildPath)
+        {
+            // 1) delete/add edges first (so vertices can be isolated before deletion)
+            for (int i = 0; i < nA; ++i)
+            {
+                for (int j = 0; j < nA; ++j)
+                {
+                    const int a = this->getMultiplicity(i, j);
+                    int b = 0;
+                    const int mi = res.mapping_this_to_other[i];
+                    const int mj = res.mapping_this_to_other[j];
+                    if (mi != -1 && mj != -1)
+                        b = other.getMultiplicity(mi, mj);
+
+                    const int d = b - a;
+                    if (d > 0)
+                        res.ops.push_back({GedEditOp::Type::AddEdge, i, j, d});
+                    else if (d < 0)
+                        res.ops.push_back({GedEditOp::Type::DelEdge, i, j, -d});
+                }
+            }
+
+            // 2) now delete vertices that are not mapped
+            for (int v : res.deleted_vertices_in_this)
+            {
+                res.ops.push_back({GedEditOp::Type::DelVertex, v, -1, 1});
+            }
+        }
+    }
+
+    return res;
 }
