@@ -773,47 +773,65 @@ namespace {
         }
     }
 
-    std::vector<Graph::GedEditOp> buildEditPathFromBijection(
+    std::vector<Graph::GedEditOp> buildEditPathFromMapping(
         const Graph& A,
-        const int nA,
         const Graph& B,
-        const int nB,
-        const std::vector<int>& f)
+        const Mapping& mapAtoB,
+        const std::vector<int>& insertedVerticesInB,
+        const std::vector<int>& deletedVerticesInA)
     {
-        const int n = (int)f.size();
         std::vector<Graph::GedEditOp> ops;
+        const int nA = A.getVerticesCount();
+        const int nB = B.getVerticesCount();
 
-        // If A is smaller, add missing vertices first (they are the padded A-vertices).
-        if (nA < nB)
+        if (nA <= nB)
         {
-            for (int v = nA; v < n; ++v)
+            // Emit ops in target (B) indexing.
+            std::vector<int> inv(nB, -1); // B vertex -> A vertex, or -1 for inserted
+            for (int u = 0; u < nA; ++u)
+            {
+                const int v = mapAtoB[u];
+                if (v >= 0 && v < nB) inv[v] = u;
+            }
+
+            for (int v : insertedVerticesInB)
                 ops.push_back({Graph::GedEditOp::Type::AddVertex, v, -1, 1});
+
+            for (int i = 0; i < nB; ++i)
+            {
+                for (int j = 0; j < nB; ++j)
+                {
+                    const int ai = inv[i];
+                    const int aj = inv[j];
+                    const int cur = (ai != -1 && aj != -1) ? A.getMultiplicity(ai, aj) : 0;
+                    const int desired = B.getMultiplicity(i, j);
+                    const int delta = desired - cur;
+                    if (delta > 0) ops.push_back({Graph::GedEditOp::Type::AddEdge, i, j, delta});
+                    else if (delta < 0) ops.push_back({Graph::GedEditOp::Type::DelEdge, i, j, -delta});
+                }
+            }
+            return ops;
         }
 
-        // Edge edits in the current (padded) A vertex indexing.
-        for (int i = 0; i < n; ++i)
+        // nA > nB: emit ops in source (A) indexing.
+        for (int i = 0; i < nA; ++i)
         {
-            for (int j = 0; j < n; ++j)
+            for (int j = 0; j < nA; ++j)
             {
-                const int cur = multPad(A, nA, i, j);
-                const int desired = multPad(B, nB, f[i], f[j]);
+                const int cur = A.getMultiplicity(i, j);
+                int desired = 0;
+                const int mi = mapAtoB[i];
+                const int mj = mapAtoB[j];
+                if (mi != -1 && mj != -1) desired = B.getMultiplicity(mi, mj);
+
                 const int delta = desired - cur;
-                if (delta > 0)
-                    ops.push_back({Graph::GedEditOp::Type::AddEdge, i, j, delta});
-                else if (delta < 0)
-                    ops.push_back({Graph::GedEditOp::Type::DelEdge, i, j, -delta});
+                if (delta > 0) ops.push_back({Graph::GedEditOp::Type::AddEdge, i, j, delta});
+                else if (delta < 0) ops.push_back({Graph::GedEditOp::Type::DelEdge, i, j, -delta});
             }
         }
+        for (int v : deletedVerticesInA)
+            ops.push_back({Graph::GedEditOp::Type::DelVertex, v, -1, 1});
 
-        // If A is larger, delete vertices last (after edges are removed to isolate them).
-        if (nA > nB)
-        {
-            for (int v = 0; v < nA; ++v)
-            {
-                if (f[v] >= nB)
-                    ops.push_back({Graph::GedEditOp::Type::DelVertex, v, -1, 1});
-            }
-        }
         return ops;
     }
 
@@ -848,6 +866,29 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
 
     const int nPad = std::max(nA, nB);
     const long long vertexCost = (long long)std::llabs((long long)nA - (long long)nB);
+
+    // Trivial/degenerate cases (avoid Murty/Hungarian on empty matrices).
+    if (nPad == 0)
+    {
+        res.total_cost = 0;
+        res.vertex_ops = 0;
+        res.edge_ops = 0;
+        return res;
+    }
+    if (std::min(nA, nB) == 0)
+    {
+        std::vector<int> f(nPad);
+        for (int i = 0; i < nPad; ++i) f[i] = i;
+        const long long edgeCost = edgeL1CostPaddedUnderBijection(*this, nA, other, nB, f);
+
+        res.vertex_ops = vertexCost;
+        res.edge_ops = edgeCost;
+        res.total_cost = vertexCost + edgeCost;
+        fillMappingAndVertexListsFromBijection(nA, nB, f, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+        if (buildPath)
+            res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+        return res;
+    }
 
     // Choose orientation for mapping enumeration: smaller -> larger
     const bool aIsSmallerOrEqual = (nA <= nB);
@@ -944,7 +985,7 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
     res.total_cost = bestTotal;
     fillMappingAndVertexListsFromBijection(nA, nB, bestF, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
     if (buildPath)
-        res.ops = buildEditPathFromBijection(*this, nA, other, nB, bestF);
+        res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
 
     return res;
 }
@@ -1091,7 +1132,7 @@ Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbos
     {
         fillMappingAndVertexListsFromBijection(nA, nB, bestF, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
         if (buildPath)
-            res.ops = buildEditPathFromBijection(*this, nA, other, nB, bestF);
+            res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
     }
     return res;
 }
