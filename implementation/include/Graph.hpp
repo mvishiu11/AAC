@@ -1,16 +1,23 @@
 #include "Hungarian.hpp"
+#include <functional>
+#include <optional>
 #include <vector>
 
 #pragma once
 
 class Graph
 {
-private:
+public:
+    using EdgeMatrix = std::vector<std::vector<int>>;
+    template<typename T>
+    using Callback = std::optional<std::function<T>>;
+
+public:
     int nodes;
-    std::vector<std::vector<int>> edges;
+    EdgeMatrix edges;
     bool detectIsomorphism(Graph &hostGraph, const std::vector<int> &vertexMapping);
     CostMatrix computeVertexMappingCostMatrix(const Graph &hostGraph) const;
-    std::vector<std::vector<int>> constructEdgeSet(const Graph &G, Mapping mapping) const;
+    EdgeMatrix constructEdgeSet(const Graph &G, Mapping mapping) const;
     int *getVerticesByDegree();
     
 public:
@@ -59,12 +66,12 @@ public:
         }
         return inDegree;
     }
-    bool hasNSubgraphs(Graph &G, int N = 1, bool verbose = false);
-    bool hasNSubgraphsApprox(Graph &G, int K, int N = 1, bool verbose = false);
-    bool hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
-    void findMinimalExtension(Graph &G, int N = 1);
-    void findMinimalExtensionApprox(Graph &G, int K, int N = 1, bool verbose = false);
-    void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, bool verbose = false);
+    bool hasNSubgraphs(Graph &G, int N = 1, Callback<void(const Mapping&)> onMapping = {});
+    bool hasNSubgraphsApprox(Graph &G, int K, int N = 1, Callback<void(const Mapping&)> onMapping = {});
+    bool hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, Callback<void(const Mapping&)> onMapping = {});
+    void findMinimalExtension(Graph &G, int N = 1, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix = {});
+    void findMinimalExtensionApprox(Graph &G, int K, int N = 1, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix = {});
+    void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix = {});
     GedResult gedApprox(const Graph &other, int K, bool buildPath = false, bool verbose = false) const;
     const std::vector<std::vector<int>> &Edges() const;
     GedResult gedExact(const Graph &other, bool buildPath = false, bool verbose = false, long long maxStates = 5000000) const;

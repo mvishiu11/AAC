@@ -1,6 +1,8 @@
 #include "../include/Graph.hpp"
 #include "../include/Hungarian.hpp"
+#include "Util.hpp"
 #include <climits>
+#include <cstdint>
 #include <iostream>
 #include <algorithm>
 #include <functional>
@@ -27,10 +29,8 @@ int Graph::getSize() const
     return size + nodes;
 }
 
-bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
+bool Graph::hasNSubgraphs(Graph &G, int N, Callback<void(const Mapping&)> onMapping)
 {
-    ////std::cout << "### N SUBGRAPH ISOMORPHISMS CHECK ###" << endl; 
-
     Graph H = *this;
     if (G.getVerticesCount() == 0 || G.getVerticesCount() > H.getVerticesCount())
     {
@@ -158,8 +158,9 @@ bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
 
     int *order = G.getVerticesByDegree();
     int *usedH = new int[Hn]();
-    int *mapping = (int *)malloc(sizeof(int) * Gn);
-    fill(mapping, mapping + Gn, -1);
+    //int *mapping = (int *)malloc(sizeof(int) * Gn);
+    Mapping mapping(Gn,-1);
+    //fill(mapping, mapping + Gn, -1);
     int count = 0;
 
     function<bool(int)> DFS = [&](int t) -> bool
@@ -170,13 +171,16 @@ bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
         if (t == Gn)
         {
             count++;
-            if (verbose) {
+            if (false) {
                 //std::cout << "Succesful mapping: ";
                 for (int i = 0; i < Gn; ++i)
                 {
                     //std::cout << mapping[i] << " ";
                 }
                 //std::cout << endl;
+            }
+            if (onMapping.has_value()) {
+                onMapping.value()(mapping);
             }
             if (count >= N)
                 return true;
@@ -239,7 +243,7 @@ bool Graph::hasNSubgraphs(Graph &G, int N, bool verbose)
     return result;
 }
 
-bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, bool verbose)
+bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, Callback<void(const Mapping&)> onMapping)
 {
     //std::cout << "### N SUBGRAPH ISOMORPHISMS APPROXIMATION ###" << endl; 
     // Host graph is "this"; pattern graph is G
@@ -280,7 +284,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
 
         if (G.detectIsomorphism(H, mapping))
         {
-            if (verbose) {
+            if (false) {
                 //std::cout << "isomorphism #" << total << ": " << mapping << '\n';
             }
             total += 1;
@@ -294,7 +298,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, const std::vector<Mapping> &map
     return false;
 }
 
-bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N, bool verbose)
+bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N, Callback<void(const Mapping&)> onMapping)
 {
     Graph H = *this;
 
@@ -306,7 +310,7 @@ bool Graph::hasNSubgraphsApprox(Graph &G, int K, int N, bool verbose)
         return false;
 
     vector<Mapping> mappings = H.selectMappings(G, K);
-    return hasNSubgraphsApprox(G, K, mappings, N, verbose);
+    return hasNSubgraphsApprox(G, K, mappings, N, onMapping);
 }
 
 int *Graph::getVerticesByDegree()
@@ -337,10 +341,8 @@ int *Graph::getVerticesByDegree()
     return sortedVertices;
 }
 
-void Graph::findMinimalExtension(Graph &G, int N)
+void Graph::findMinimalExtension(Graph &G, int N, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix)
 {
-    //std::cout << "### MINIMAL EXTENSION ###" << endl; 
-
     Graph H = *this;
 
     int Hn = H.getVerticesCount();
@@ -349,6 +351,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
     int *order = G.getVerticesByDegree();
     int *usedH = new int[Hn]();
     vector<int> mapping(Gn, -1);
+    vector<Mapping> mappings;
     vector<vector<vector<int>>> all_Edgesets;
 
     function<void(vector<int>)> createEdgeset = [&](vector<int> mapping) -> void
@@ -371,7 +374,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
                     local_Edgeset[ja][jb] = total; // for some reaon this should be flipped, idk rly why
             }
         }
-
+        mappings.push_back(mapping);
         all_Edgesets.push_back(local_Edgeset);
     };
 
@@ -405,13 +408,14 @@ void Graph::findMinimalExtension(Graph &G, int N)
 
     int counter = 0;
     int bestCost = INT_MAX;
-    vector<vector<int>> bestEdgeSet(Hn, vector<int>(Hn, 0));
-    vector<int> usedInSum(N, -1);
-    vector<vector<int>> sum(Hn, vector<int>(Hn, 0));
-    set<int> usedEdgeSets;
+    std::vector<int> bestEdgeSets;
+    EdgeMatrix bestEdgeSet(Hn, vector<int>(Hn, 0));
+    std::vector<int> usedInSum(N, -1);
+    EdgeMatrix sum(Hn, vector<int>(Hn, 0));
+    std::set<int> usedEdgeSets;
 
-    auto AdjMatrixAdd = [&](vector<vector<int>> &mat1,
-                            const vector<vector<int>> &mat2)
+    auto AdjMatrixAdd = [&](EdgeMatrix &mat1,
+                            const EdgeMatrix &mat2)
     {
         for (int i = 0; i < Hn; ++i)
         {
@@ -422,7 +426,7 @@ void Graph::findMinimalExtension(Graph &G, int N)
         }
     };
 
-    auto EdgeSetCost = [&](const vector<vector<int>> &mat)
+    auto EdgeSetCost = [&](const EdgeMatrix &mat)
     {
         int cost = 0;
         for (int i = 0; i < Hn; ++i)
@@ -431,25 +435,44 @@ void Graph::findMinimalExtension(Graph &G, int N)
         return cost;
     };
     // Recursive DFS over combinations of edge sets
-    function<void(int)> EdgeDfs = [&](int level)
+    uint64_t hwdp = 0;
+    int total = choose(count_assignments(G.getVerticesCount(), H.getVerticesCount()),N)*factorial(1, N);
+    function<void(int)> EdgeDfs = [&](int level, int over = 0)
     {
         ++counter;
         int cost = EdgeSetCost(sum);
-
+        hwdp+=1;        
         if (level == N)
         {
             if (cost < bestCost)
             {
+                bestEdgeSets.clear();
+                for (auto i : usedEdgeSets) {
+                    bestEdgeSets.push_back(i);
+                }
                 bestCost = cost;
                 bestEdgeSet = sum;
+                if (onEdgeMatrix.has_value()) {
+                    std::vector<Mapping> temp_mappings;
+                    for (auto i : bestEdgeSets) {
+                        temp_mappings.push_back(mappings[i]);
+                    }
+                    onEdgeMatrix.value()(temp_mappings, bestEdgeSet, bestCost);
+                }
             }
             return;
         }
 
-        if (cost > bestCost)
+        if (cost > bestCost) {
+            int x = 1;
+            for (int i = level; i<N; i++) {
+                x*=all_Edgesets.size();
+            }
+            hwdp += x;
             return;
+        }
 
-        for (size_t i = 0; i < all_Edgesets.size(); i++)
+        for (size_t i = over; i < all_Edgesets.size(); i++)
         {
             if (usedEdgeSets.count(i) == 0)
             {
@@ -466,21 +489,16 @@ void Graph::findMinimalExtension(Graph &G, int N)
     };
 
     EdgeDfs(0);
-
-    //std::cout << "Best cost: " << bestCost << endl;
-
-    //std::cout << "Extension Matrix: " << endl;
-    for (int a = 0; a < Hn; a++)
-    {
-        for (int b = 0; b < Hn; b++)
-        {
-            //std::cout << bestEdgeSet[b][a] << " ";
+    if (onEdgeMatrix.has_value()) {
+        std::vector<Mapping> temp_mappings;
+        for (auto i : bestEdgeSets) {
+            temp_mappings.push_back(mappings[i]);
         }
-        //std::cout << endl;
+        onEdgeMatrix.value()(temp_mappings, bestEdgeSet, bestCost);
     }
 }
 
-void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, bool verbose)
+void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix)
 {
     //std::cout << "### MINIMAL EXTENSION APPROXIMATION ###" << endl; 
     Graph H = *this;
@@ -493,7 +511,7 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
     vector<bool> is_isomorphism(mappings.size());
     int total = 0;
     std::transform(mappings.begin(),mappings.end(), is_isomorphism.begin(),
-        [&G,&H,&total, verbose](auto it){
+        [&G,&H,&total](auto it){
             if (G.detectIsomorphism(H, it)) {
                 total += 1;
                 // if (verbose) std::cout << "isomorphism #" << total << ": " << it << '\n';
@@ -565,11 +583,11 @@ void Graph::findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mappin
     }
 }
 
-void Graph::findMinimalExtensionApprox(Graph &G, int K, int N, bool verbose)
+void Graph::findMinimalExtensionApprox(Graph &G, int K, int N, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix)
 {
     Graph H = *this;
     vector<Mapping> mappings = H.selectMappings(G, K);
-    return findMinimalExtensionApprox(G, K, mappings, N, verbose);
+    return findMinimalExtensionApprox(G, K, mappings, N, onEdgeMatrix);
 }
 
 bool Graph::detectIsomorphism(Graph &hostGraph, const vector<int> &vertexMapping)

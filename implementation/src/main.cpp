@@ -1,13 +1,17 @@
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
+#include <ftxui/screen/color.hpp>
 #include <ostream>
 #include <string>
 #include <fstream>
 #include <iostream>
-#include <sstream>
+#include <thread>
+#include <unistd.h>
 #include <vector>
 #include "../include/Graph.hpp"
 #include "../include/TUI.hpp"
+#include "Hungarian.hpp"
 
 using namespace std;
 
@@ -50,17 +54,24 @@ int maxK(int h, int g)
 }
 
 void usage(char *name) {
-    std::cout << "Usage: " << name << " <exact|approx> <path/to/input> <N>" << std::endl;
+    std::cout << "Usage: " << name << " <ged|iso> ..." << std::endl;
     exit(-1);
 }
 
-int main(int argc, char **argv)
-{
-    if (argc < 3) return -1;
+void usage_iso(char *name) {
+    std::cout << "Usage: " << name << " iso <exact|approx> <path/to/input> <N>" << std::endl;
+    exit(-1);
+}
 
-    string mode = argv[1];
-    if (mode == "ged")
-    {
+void usage_ged(char *name) {
+    std::cout << "Usage: " << name << " ged <exact|approx> <path> <K>" << std::endl;
+    std::cout << "<exact|approx> - should the program use exact or approximation algorithm?" << std::endl;
+    std::cout << "<path> - path to the input file" << std::endl;
+    std::cout << "<K> - the upper bound on the mappings checked by the approximation algorithm; ignored in case of the exact algorithm" << std::endl;
+    exit(-1);
+}
+
+int ged(int argc, char **argv) {
         // New forms:
         //   main ged exact <file> [v] [p]
         //   main ged approx <file> <K> [v] [p]
@@ -71,24 +82,26 @@ int main(int argc, char **argv)
         std::string filename;
         int K = 0;
         CliFlags flags;
+        flags.path = true;
+        flags.verbose = true;
 
         if (sub == "exact")
         {
-            if (argc < 4) return -1;
+            if (argc < 4) usage_ged(argv[0]);
             filename = argv[3];
-            flags = parseFlags(argc, argv, 4);
+            //flags = parseFlags(argc, argv, 4);
         }
         else if (sub == "approx")
         {
-            if (argc < 5) return -1;
+            if (argc < 5) usage_ged(argv[0]);
             filename = argv[3];
             K = stoi(argv[4]);
-            flags = parseFlags(argc, argv, 5);
+            //flags = parseFlags(argc, argv, 5);
         }
         else
         {
             // backward-compatible approx
-            if (argc < 4) return -1;
+            if (argc < 4) usage_ged(argv[0]);
             filename = argv[2];
             K = stoi(argv[3]);
             flags = parseFlags(argc, argv, 4);
@@ -97,8 +110,8 @@ int main(int argc, char **argv)
 
         const bool verbose = flags.verbose;
         auto graphs = parseInput(filename);
-        Graph G = graphs[0];
-        Graph H = graphs[1];
+        Graph G = graphs.first;
+        Graph H = graphs.second;
 
         if (sub == "exact")
         {
@@ -174,53 +187,91 @@ int main(int argc, char **argv)
             }
         }
         return 0;
-    }
+}
 
-    if (argc < 4) return -1;
+int iso(int argc, char **argv) {
+    if (argc < 5) usage_iso(argv[0]);
 
-    string filename = argv[2];
-    int third = stoi(argv[3]);
-    const CliFlags flags = parseFlags(argc, argv, 4);
-    const bool verbose = flags.verbose;
-
-    auto graphs = parseInput(filename);
-    Graph G = graphs[0];
-    Graph H = graphs[1];
-    if (mode != "exact" && mode != "approx")
-    {
-        cout << "Wrong mode provided! Use: exact | approx | ged\n";
-        cout << mode << endl;
-        return -1;
-    }
-
-    int N = third;
-    if (N < 1)
-    {
-        cout << "N needa to be >1!" << endl;
-        return -1;
-    }
+    string mode = argv[2];
+    string filename = argv[3];
 
     auto graphs = parseInput(filename);
     Graph G = graphs.first;
     Graph H = graphs.second;
-    TUI::State state(G,H);
-    TUI::TUI(state);
-    return 0;
+    bool verbose = true;
+    int N = std::stoi(argv[4]);
+    if (N < 1)
+    {
+        cout << "N needs to be >=1!" << endl;
+        exit(-1);
+    }
+
+    TUI::TUI state(G,H);
+    std::thread tui_thread([&state]{
+        state.run();
+        exit(0);
+    });
     int K = maxK(H.getVerticesCount(), G.getVerticesCount());
     K = std::min(H.getVerticesCount() * G.getVerticesCount(), K);
     K = std::min(50 * N, K);
 
+    auto push_mapping = [&state](const Mapping& m) {
+            state.alter([&m](TUI::TUI &tui){
+                tui.found_mappings.push_back(m);
+                return true;
+            });
+        };
+    auto replace_extension = [&state](const std::vector<Mapping>& mp, const Graph::EdgeMatrix& em, int cost) {
+            state.alter([&mp,&em,&cost](TUI::TUI &tui){
+                for (int i = 0; i < tui.extension.size(); i++) {
+                    for (int j = 0; j < tui.extension[i].size(); j++) {
+                        tui.extension[i][j] = tui.H.Edges()[i][j]+em[i][j];
+                    }
+                }
+                tui.extension_cost = cost;
+                //tui.created_mappings = mp;
+                tui.found_mappings = mp;
+                return true;
+            });
+        };
+    auto report_progress = [&state](double x) {
+            /*state.alter([x](TUI::TUI &tui){
+                tui.progress = std::clamp<float>(x, 0, 1);
+                return true;
+            });*/
+        };
     if (mode == "exact")
     {
         //std::cout<<"\n ===== EXACT ALGORITHMS ===== \n"<<endl;
-        if (H.hasNSubgraphs(G, N, verbose))
+        state.alter([](TUI::TUI &tui){
+            tui.message = "Searching for mappings that form an isomorphism... (Check the mappings found in the Isomorphisms tab)"; 
+            return true;
+        });
+        sleep(1);
+        if (H.hasNSubgraphs(G, N, push_mapping))
         {
+            state.alter([N](TUI::TUI &tui){
+                tui.message = "Found all " + std::to_string(N) + " isomorphic mappings!"; 
+                return true;
+            });
+            sleep(1);
             //std::cout << "EXACT: YES" << endl;
         }
         else
         {
+            state.alter([N](TUI::TUI &tui){
+                tui.message = "Found only " + std::to_string(tui.found_mappings.size()) + "; searching for minimal extension."; 
+                return true;
+            });
+            sleep(1);
             //std::cout << "EXACT: NO" << endl;
-            H.findMinimalExtension(G, N);
+            H.findMinimalExtension(G, N, replace_extension);
+            state.alter([N](TUI::TUI &tui){
+                tui.message = "Extension found!";
+                tui.message_color = ftxui::Color::GreenLight;
+                tui.progress = false;
+                return true;
+            });
         }
     }
 
@@ -232,18 +283,33 @@ int main(int argc, char **argv)
         const std::vector<Mapping> mappings = H.selectMappings(G, K, verbose);
 
         //std::cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
-        if (H.hasNSubgraphsApprox(G, K, mappings, N, verbose))
+        if (H.hasNSubgraphsApprox(G, K, mappings, N))
         {
             //std::cout << "APPROXIMATION: YES" << endl;
         }
         else
         {
             //std::cout << "APPROXIMATION: NO" << endl;
-            H.findMinimalExtensionApprox(G, K, mappings, N, verbose);
+            H.findMinimalExtensionApprox(G, K, mappings, N);
         }
     }
 
+    tui_thread.join();
     return 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc < 2) usage(argv[0]);;
+
+    string alg = argv[1];
+    if (alg == "ged") {
+        return ged(argc, argv);
+    } else if (alg == "iso") {
+        return iso(argc, argv);
+    }
+    
+    usage(argv[0]);
 }
 
 std::pair<Graph,Graph> parseInput(string filename)
