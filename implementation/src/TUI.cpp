@@ -117,17 +117,6 @@ ftxui::Component Isomorphisms(const TUI::TUI &state) {
                         }
                         return ftxui::vbox(elems)|ftxui::border;}));
             }
-            for (auto v: state.created_mappings) {
-                children.push_back(ftxui::Renderer(
-                    [v]{
-                        ftxui::Elements elems;
-                        for (int i = 0; i<v.size(); i++) {
-                            std::ostringstream t;
-                            t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
-                            elems.push_back(ftxui::text(t.str()));
-                        }
-                        return ftxui::vbox(elems)|ftxui::border;}));
-            }
             return ftxui::Container::Horizontal(std::move(children))->Render();
         }
     );
@@ -144,12 +133,8 @@ void TUI::TUI::run() {
     auto e = MatrixC(eLabel, extension, [this](int x, int y){return (H.Edges()[x][y]!=extension[x][y]) ? color(Color::Red) : color(Color::Green);});
     
     int selector = 1;
-    std::vector<std::string> tab_headers{
-      "Isomorphisms", "Input", "Extension"
-    };
-    auto toggle = Toggle(tab_headers, &selector)|center|flex;
 
-    auto inputTab = Container::Vertical({h, g});
+
     auto colors = LinearGradient().Stop(Color::Red, 0.0).Stop(Color::Yellow, 0.5).Stop(Color::Green, 1.0);
     /*auto progress = Renderer([this, &colors]{
         return window(text("Constructing extension..."), hbox({
@@ -157,10 +142,15 @@ void TUI::TUI::run() {
             text(std::to_string(int(this->progress*100)))
         }));
     });*/
-    auto isomorphismsTab = Isomorphisms(*this);
+    auto isomorphisms = Isomorphisms(*this);
     auto outputTab = Container::Vertical({e});
-    auto tabs = Container::Tab({isomorphismsTab, inputTab, outputTab}, &selector);
-    auto container = Container::Vertical({toggle,tabs});
+    //auto tabs = Container::Tab({isomorphismsTab, inputTab, outputTab}, &selector);
+    //auto container = Container::Vertical({toggle,tabs});
+    bool original = false;
+    auto matrices = Renderer([&]{
+        const Component &hv = original ? h : e;
+        return vbox({g->Render(), hv->Render()});
+    });
     int frame = 0;
     auto indicator = Renderer([this, &colors,&frame]{
         if (!progress) {
@@ -168,16 +158,22 @@ void TUI::TUI::run() {
         }
         return spinner(17,frame)|color(colors);
     });
-    auto renderer = Renderer(container, [&] {
+    auto handler = CatchEvent([&](Event ev){
+        if (ev == Event::Character(' ')) {
+            original = !original;
+            return true;
+        }
+        return false;
+    });
+    auto renderer = Renderer([&] {
         return vbox({
-                    toggle->Render(),
-                    separator(),
-                    hbox(text(message) | color(message_color), filler(), indicator->Render()),
-                    separator(),
-                    tabs->Render(),
-                }) | border;
-        });
-
+            hbox(text(message) | color(message_color), filler(), indicator->Render()),
+            separator(),
+            matrices->Render(),
+            separator(),
+            window(text("Isomorphic mappings"), isomorphisms->Render() | center)
+        }) | border;
+    });
     bool running = true;
     std::thread updater([this, &frame, &running]{
         while (running) {
@@ -186,6 +182,6 @@ void TUI::TUI::run() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
-    screen.Loop(renderer);
+    screen.Loop(renderer | handler);
     running = false;
 }
