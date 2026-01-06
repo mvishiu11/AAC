@@ -46,14 +46,14 @@ namespace {
     }
 }
 
-TUI::TUI::TUI(Graph &G, Graph &H): G(G), H(H),
-screen(ftxui::ScreenInteractive::TerminalOutput()), found_mappings(), created_mappings() {
+TUI::IsoTUI::IsoTUI(Graph &G, Graph &H): G(G), H(H),
+screen(ftxui::ScreenInteractive::Fullscreen()), found_mappings(), created_mappings() {
     progress = true;
     //total = count_assignments(G.getVerticesCount(), H.getVerticesCount());
     extension = H.Edges();    
 }
 
-void TUI::TUI::alter(std::function<bool(TUI&)> f) {
+void TUI::IsoTUI::alter(std::function<bool(IsoTUI&)> f) {
     lock.lock();
     auto dirty = f(*this);
     lock.unlock();
@@ -62,13 +62,13 @@ void TUI::TUI::alter(std::function<bool(TUI&)> f) {
     }
 }
 
-void TUI::TUI::read(std::function<void(const TUI&)> f) {
+void TUI::IsoTUI::read(std::function<void(const IsoTUI&)> f) {
     lock.lock();
     f(*this);
     lock.unlock();
 }
 
-void TUI::TUI::redraw() {
+void TUI::IsoTUI::redraw() {
     screen.PostEvent(ftxui::Event::Character('r'));
 }
 
@@ -102,32 +102,12 @@ ftxui::Component MatrixC(std::string &label, const std::vector<std::vector<int>>
     return ftxui::CatchEvent(child,[](ftxui::Event ev){return ev==ftxui::Event::Custom;});
 }
 
-ftxui::Component Isomorphisms(const TUI::TUI &state) {
-    return ftxui::Renderer(
-        [&state]{
-            ftxui::Components children;
-            for (auto v: state.found_mappings) {
-                children.push_back(ftxui::Renderer(
-                    [v]{
-                        ftxui::Elements elems;
-                        for (int i = 0; i<v.size(); i++) {
-                            std::ostringstream t;
-                            t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
-                            elems.push_back(ftxui::text(t.str()));
-                        }
-                        return ftxui::vbox(elems)|ftxui::border;}));
-            }
-            return ftxui::Container::Horizontal(std::move(children))->Render();
-        }
-    );
-}
-
-void TUI::TUI::run() {
+void TUI::IsoTUI::run() {
     using namespace ftxui;
     using namespace std::chrono_literals;
-    std::string gLabel{"Adjacency matrix of G"};
-    std::string hLabel{"Adjacency matrix of H"};
-    std::string eLabel{"Adjacency matrix of H (extended)"};
+    std::string gLabel{" Adjacency matrix of G "};
+    std::string hLabel{" Adjacency matrix of H "};
+    std::string eLabel{" Adjacency matrix of extension of H "};
     auto g = MatrixC(gLabel, G.Edges(), [](int x, int y){return color(Color::Green);});
     auto h = MatrixC(hLabel, H.Edges(), [](int x, int y){return color(Color::Green);});
     auto e = MatrixC(eLabel, extension, [this](int x, int y){return (H.Edges()[x][y]!=extension[x][y]) ? color(Color::Red) : color(Color::Green);});
@@ -136,20 +116,37 @@ void TUI::TUI::run() {
 
 
     auto colors = LinearGradient().Stop(Color::Red, 0.0).Stop(Color::Yellow, 0.5).Stop(Color::Green, 1.0);
-    /*auto progress = Renderer([this, &colors]{
-        return window(text("Constructing extension..."), hbox({
-            gauge(this->progress) | color(colors),
-            text(std::to_string(int(this->progress*100)))
-        }));
-    });*/
-    auto isomorphisms = Isomorphisms(*this);
+    float scroll_x;
+    auto isomorphisms = ftxui::Renderer([this,&scroll_x]{
+        ftxui::Elements children;
+        int ind = 1;
+        for (auto v: found_mappings) {
+            ftxui::Elements elems;
+            {
+                std::ostringstream t;
+                t << "#" << ind;
+                elems.push_back(ftxui::text(t.str())|center);
+                elems.push_back(ftxui::separator());
+                ind+=1;
+            }
+            for (int i = 0; i<v.size(); i++) {
+                std::ostringstream t;
+                //t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
+                t << i+1 << " => " << v[i]+1;
+                elems.push_back(ftxui::text(t.str())|center);
+            }
+            children.push_back(ftxui::vbox(elems)|ftxui::border);
+        }
+        return hbox(children) | focusPositionRelative(scroll_x, 0) | xframe | flex;
+    });
+    
     auto outputTab = Container::Vertical({e});
     //auto tabs = Container::Tab({isomorphismsTab, inputTab, outputTab}, &selector);
     //auto container = Container::Vertical({toggle,tabs});
     bool original = false;
     auto matrices = Renderer([&]{
         const Component &hv = original ? h : e;
-        return vbox({g->Render(), hv->Render()});
+        return vbox({g->Render(), hv->Render(), text("Extension Cost: " + std::to_string(this->extension_cost))});
     });
     int frame = 0;
     auto indicator = Renderer([this, &colors,&frame]{
@@ -162,6 +159,18 @@ void TUI::TUI::run() {
         if (ev == Event::Character(' ')) {
             original = !original;
             return true;
+        } else if (ev == Event::q) {
+            screen.Exit();
+            if (!finished) {
+                std::cout << std::endl << "Aborted!" << std::endl;
+            }
+            exit(0);
+        } else if (ev == Event::ArrowRight) {
+            scroll_x += 0.25f;
+            scroll_x = std::clamp(scroll_x, 0.f, 1.f);
+        } else if (ev == Event::ArrowLeft) {
+            scroll_x -= 0.25f;
+            scroll_x = std::clamp(scroll_x, 0.f, 1.f);
         }
         return false;
     });
@@ -171,7 +180,7 @@ void TUI::TUI::run() {
             separator(),
             matrices->Render(),
             separator(),
-            window(text("Isomorphic mappings"), isomorphisms->Render() | center)
+            window(text(" Isomorphic mappings (G[i] => H[j]) "), isomorphisms->Render() | center)
         }) | border;
     });
     bool running = true;

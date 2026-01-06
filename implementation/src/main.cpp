@@ -206,7 +206,7 @@ int iso(int argc, char **argv) {
         exit(-1);
     }
 
-    TUI::TUI state(G,H);
+    TUI::IsoTUI state(G,H);
     std::thread tui_thread([&state]{
         state.run();
         exit(0);
@@ -216,13 +216,14 @@ int iso(int argc, char **argv) {
     K = std::min(50 * N, K);
 
     auto push_mapping = [&state](const Mapping& m) {
-            state.alter([&m](TUI::TUI &tui){
+            state.alter([&m](TUI::IsoTUI &tui){
                 tui.found_mappings.push_back(m);
                 return true;
             });
         };
-    auto replace_extension = [&state](const std::vector<Mapping>& mp, const Graph::EdgeMatrix& em, int cost) {
-            state.alter([&mp,&em,&cost](TUI::TUI &tui){
+    int times = 0;
+    auto replace_extension = [&state, &times](const std::vector<Mapping>& mp, const Graph::EdgeMatrix& em, int cost) {
+            state.alter([&mp,&em,&cost,&times](TUI::IsoTUI &tui){
                 for (int i = 0; i < tui.extension.size(); i++) {
                     for (int j = 0; j < tui.extension[i].size(); j++) {
                         tui.extension[i][j] = tui.H.Edges()[i][j]+em[i][j];
@@ -230,46 +231,42 @@ int iso(int argc, char **argv) {
                 }
                 tui.extension_cost = cost;
                 //tui.created_mappings = mp;
+                times+=1;
                 tui.found_mappings = mp;
                 return true;
             });
         };
-    auto report_progress = [&state](double x) {
-            /*state.alter([x](TUI::TUI &tui){
-                tui.progress = std::clamp<float>(x, 0, 1);
-                return true;
-            });*/
-        };
     if (mode == "exact")
     {
         //std::cout<<"\n ===== EXACT ALGORITHMS ===== \n"<<endl;
-        state.alter([](TUI::TUI &tui){
-            tui.message = "Searching for mappings that form an isomorphism... (Check the mappings found in the Isomorphisms tab)"; 
+        state.alter([](TUI::IsoTUI &tui){
+            tui.message = "Searching for mappings that form an isomorphism..."; 
+                tui.message_color = ftxui::Color::Yellow;
             return true;
         });
-        sleep(1);
         if (H.hasNSubgraphs(G, N, push_mapping))
         {
-            state.alter([N](TUI::TUI &tui){
+            state.alter([N](TUI::IsoTUI &tui){
                 tui.message = "Found all " + std::to_string(N) + " isomorphic mappings!"; 
+                tui.message_color = ftxui::Color::GreenLight;
+                tui.progress = false;
                 return true;
             });
-            sleep(1);
-            //std::cout << "EXACT: YES" << endl;
         }
         else
         {
-            state.alter([N](TUI::TUI &tui){
-                tui.message = "Found only " + std::to_string(tui.found_mappings.size()) + "; searching for minimal extension."; 
+            state.alter([N](TUI::IsoTUI &tui){
+                tui.message = "Searching for minimal extension... (below shown is current best)"; 
+                tui.message_color = ftxui::Color::Yellow;
                 return true;
             });
-            sleep(1);
             //std::cout << "EXACT: NO" << endl;
             H.findMinimalExtension(G, N, replace_extension);
-            state.alter([N](TUI::TUI &tui){
+            state.alter([N](TUI::IsoTUI &tui){
                 tui.message = "Extension found!";
                 tui.message_color = ftxui::Color::GreenLight;
                 tui.progress = false;
+                tui.finished = true;
                 return true;
             });
         }
@@ -277,25 +274,41 @@ int iso(int argc, char **argv) {
 
     if (mode == "approx")
     {
-        if (verbose) {
-            //std::cout << "### SELECT MAPPINGS ###" << endl;
-        }
+        state.alter([K](TUI::IsoTUI &tui){
+            tui.message = "Selecting " + std::to_string(K) + " most promising mappings..."; 
+            tui.message_color = ftxui::Color::Yellow;
+            return true;
+        });
         const std::vector<Mapping> mappings = H.selectMappings(G, K, verbose);
-
-        //std::cout<<"\n ===== APPROXIMATE ALGORITHMS ===== \n"<<endl;
-        if (H.hasNSubgraphsApprox(G, K, mappings, N))
+        if (H.hasNSubgraphsApprox(G, K, mappings, N, push_mapping))
         {
-            //std::cout << "APPROXIMATION: YES" << endl;
+            state.alter([N](TUI::IsoTUI &tui){
+                tui.message = "Found all " + std::to_string(N) + " isomorphic mappings!"; 
+                tui.message_color = ftxui::Color::GreenLight;
+                tui.progress = false;
+                return true;
+            });
         }
         else
         {
-            //std::cout << "APPROXIMATION: NO" << endl;
-            H.findMinimalExtensionApprox(G, K, mappings, N);
+            state.alter([N](TUI::IsoTUI &tui){
+                tui.message = "Found " + std::to_string(tui.found_mappings.size()) + " isomorphic mappings; searching for minimal extension..."; 
+                tui.message_color = ftxui::Color::Yellow;
+                return true;
+            });
+            H.findMinimalExtensionApprox(G, K, mappings, N, replace_extension);
+            state.alter([N](TUI::IsoTUI &tui){
+                tui.message = "Extension found!";
+                tui.message_color = ftxui::Color::GreenLight;
+                tui.progress = false;
+                tui.finished = true;
+                return true;
+            });
         }
     }
 
     tui_thread.join();
-    return 0;
+    exit(0);
 }
 
 int main(int argc, char **argv)
