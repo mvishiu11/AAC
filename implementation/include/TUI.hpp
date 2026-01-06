@@ -4,7 +4,18 @@
 #include <functional>
 #include <mutex>
 #include <vector>
+#include <ftxui/component/component_base.hpp>
+#include <ftxui/component/event.hpp>
+#include <ftxui/dom/deprecated.hpp>
+#include <ftxui/dom/elements.hpp>
+#include <ftxui/dom/node.hpp>
+#include <ftxui/dom/selection.hpp>
+#include <ftxui/dom/table.hpp>
+#include <ftxui/screen/color.hpp>
+#include <ftxui/screen/screen.hpp>
+#include <ftxui/screen/string.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/component/component.hpp>
 namespace TUI {
     struct IsoTUI {
         bool finished;
@@ -34,10 +45,7 @@ namespace TUI {
         bool finished;
         Graph &G;
         Graph &H;
-        std::vector<std::vector<int>> extension;
-        int extension_cost;
-        std::vector<std::vector<int>> found_mappings;
-        std::vector<std::vector<int>> created_mappings;
+        Graph::GedResult result;
         bool progress;
         std::string algorithm;
         std::string message;
@@ -53,4 +61,6 @@ namespace TUI {
         void read(std::function<void(const GedTUI&)>);
         void run();
     };
+    ftxui::Table Matrix(const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st);
+    ftxui::Component MatrixC(std::string &label, const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st);
 }

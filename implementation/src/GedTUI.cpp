@@ -4,6 +4,7 @@
 #define UNICODE
 #include "TUI.hpp"
 #include "Graph.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <ftxui/component/component_base.hpp>
@@ -19,7 +20,6 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/component.hpp>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -46,14 +46,12 @@ namespace {
     }
 }
 
-TUI::IsoTUI::IsoTUI(Graph &G, Graph &H): G(G), H(H),
-screen(ftxui::ScreenInteractive::Fullscreen()), found_mappings(), created_mappings() {
+TUI::GedTUI::GedTUI(Graph &G, Graph &H): G(G), H(H),
+screen(ftxui::ScreenInteractive::Fullscreen()), result() {
     progress = true;
-    //total = count_assignments(G.getVerticesCount(), H.getVerticesCount());
-    extension = H.Edges();    
 }
 
-void TUI::IsoTUI::alter(std::function<bool(IsoTUI&)> f) {
+void TUI::GedTUI::alter(std::function<bool(GedTUI&)> f) {
     lock.lock();
     auto dirty = f(*this);
     lock.unlock();
@@ -62,17 +60,17 @@ void TUI::IsoTUI::alter(std::function<bool(IsoTUI&)> f) {
     }
 }
 
-void TUI::IsoTUI::read(std::function<void(const IsoTUI&)> f) {
+void TUI::GedTUI::read(std::function<void(const GedTUI&)> f) {
     lock.lock();
     f(*this);
     lock.unlock();
 }
 
-void TUI::IsoTUI::redraw() {
+void TUI::GedTUI::redraw() {
     screen.PostEvent(ftxui::Event::Character('r'));
 }
 
-ftxui::Table TUI::Matrix(const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
+ftxui::Table Matrix(const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
     using namespace ftxui;
     int max = 0;
     for (int i = 0; i<matrix.size(); i++) {
@@ -94,7 +92,7 @@ ftxui::Table TUI::Matrix(const std::vector<std::vector<int>> &matrix, std::funct
     return Table(cells);
 }
 
-ftxui::Component TUI::MatrixC(std::string &label, const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
+ftxui::Component MatrixC(std::string &label, const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
     auto child = ftxui::Renderer([&label, &matrix, st]{
         auto m = Matrix(matrix, st);
         return window(ftxui::text(label),m.Render());
@@ -102,7 +100,7 @@ ftxui::Component TUI::MatrixC(std::string &label, const std::vector<std::vector<
     return ftxui::CatchEvent(child,[](ftxui::Event ev){return ev==ftxui::Event::Custom;});
 }
 
-void TUI::IsoTUI::run() {
+void TUI::GedTUI::run() {
     using namespace ftxui;
     using namespace std::chrono_literals;
     std::string gLabel{" Adjacency matrix of G "};
@@ -110,43 +108,12 @@ void TUI::IsoTUI::run() {
     std::string eLabel{" Adjacency matrix of extension of H "};
     auto g = MatrixC(gLabel, G.Edges(), [](int x, int y){return color(Color::Green);});
     auto h = MatrixC(hLabel, H.Edges(), [](int x, int y){return color(Color::Green);});
-    auto e = MatrixC(eLabel, extension, [this](int x, int y){return (H.Edges()[x][y]!=extension[x][y]) ? color(Color::Red) : color(Color::Green);});
-    
-    int selector = 1;
-
-
     auto colors = LinearGradient().Stop(Color::Red, 0.0).Stop(Color::Yellow, 0.5).Stop(Color::Green, 1.0);
     float scroll_x;
-    auto isomorphisms = ftxui::Renderer([this,&scroll_x]{
-        ftxui::Elements children;
-        int ind = 1;
-        for (auto v: found_mappings) {
-            ftxui::Elements elems;
-            {
-                std::ostringstream t;
-                t << "#" << ind;
-                elems.push_back(ftxui::text(t.str())|center);
-                elems.push_back(ftxui::separator());
-                ind+=1;
-            }
-            for (int i = 0; i<v.size(); i++) {
-                std::ostringstream t;
-                //t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
-                t << i+1 << " => " << v[i]+1;
-                elems.push_back(ftxui::text(t.str())|center);
-            }
-            children.push_back(ftxui::vbox(elems)|ftxui::border);
-        }
-        return hbox(children) | focusPositionRelative(scroll_x, 0) | xframe | flex;
-    });
-    
-    auto outputTab = Container::Vertical({e});
-    //auto tabs = Container::Tab({isomorphismsTab, inputTab, outputTab}, &selector);
-    //auto container = Container::Vertical({toggle,tabs});
+
     bool original = false;
     auto matrices = Renderer([&]{
-        const Component &hv = original ? h : e;
-        return vbox({g->Render(), hv->Render(), text("Extension Cost: " + std::to_string(this->extension_cost))});
+        return vbox({g->Render(), h->Render()});
     });
     int frame = 0;
     auto indicator = Renderer([this, &colors,&frame]{
@@ -174,13 +141,68 @@ void TUI::IsoTUI::run() {
         }
         return false;
     });
+
+    auto mapping = ftxui::Renderer([this,&scroll_x]{
+        ftxui::Elements elems;
+        for (int i = 0; i<result.mapping_this_to_other.size(); i++) {
+            std::ostringstream t;
+            //t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
+            t << i+1 << " => " << result.mapping_this_to_other[i]+1;
+            elems.push_back(ftxui::text(t.str())|center);
+        }
+        return ftxui::vbox(elems)|ftxui::border;;
+    });
+    auto operations = ftxui::Renderer([this,&scroll_x]{
+        using Type = Graph::GedEditOp::Type;
+        ftxui::Elements elems;
+        for (int i = 0; i<result.ops.size(); i++) {
+            std::ostringstream t;
+            ftxui::Color col = Color::White;
+            //t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
+            auto &op = result.ops[i];
+            switch (op.type) {
+            case Graph::GedEditOp::Type::AddVertex:
+                t << "add vertex " << op.from;
+                col = Color::GreenLight;
+                break;
+            case Graph::GedEditOp::Type::DelVertex:
+                t << "remove vertex " << op.from;
+                col = Color::RedLight;
+                break;
+            case Graph::GedEditOp::Type::AddEdge:
+                t << "add edge (" << op.from << ", " << op.to <<"), " << op.multiplicity << " times";
+                col = Color::GreenLight;
+                break;
+            case Graph::GedEditOp::Type::DelEdge:
+                t << "remove edge (" << op.from << ", " << op.to <<"), " << op.multiplicity << " times";
+                col = Color::RedLight;
+                break;
+              break;
+            }
+            elems.push_back(ftxui::text(t.str())| color(col) |center);
+        }
+        return ftxui::vbox(elems)|ftxui::border;
+    });
+    auto stats = ftxui::Renderer([this,&scroll_x]{
+        std::string total = "Distance: " + std::to_string(result.total_cost);
+        std::string vert = "Vertex operations: " + std::to_string(result.vertex_ops);
+        std::string edge = "Edge operations: " + std::to_string(result.edge_ops);
+        return ftxui::vbox({
+            text(total) | color(Color::GreenLight),
+            text(vert) | color(Color::White),
+            text(edge) | color(Color::White),    
+        }) |ftxui::border;
+    });
     auto renderer = Renderer([&] {
         return vbox({
             hbox(text(message) | color(message_color), filler(), indicator->Render()),
             separator(),
             matrices->Render(),
-            separator(),
-            window(text(" Isomorphic mappings (G[i] => H[j]) "), isomorphisms->Render() | center)
+            hbox({
+                mapping->Render(),
+                operations->Render() | flex,
+                stats->Render(),
+            }) | center | xflex_grow
         }) | border;
     });
     bool running = true;

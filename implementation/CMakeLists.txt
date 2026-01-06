@@ -19,6 +19,7 @@ set(SOURCES
     src/Hungarian.cpp
     src/main.cpp
     src/TUI.cpp
+    src/GedTUI.cpp
 )
 set(FTXUI_MICROSOFT_TERMINAL_FALLBACK ON)
 include(FetchContent)

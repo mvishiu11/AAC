@@ -72,7 +72,7 @@ public:
     void findMinimalExtension(Graph &G, int N = 1, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix = {});
     void findMinimalExtensionApprox(Graph &G, int K, int N = 1, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix = {});
     void findMinimalExtensionApprox(Graph &G, int K, const std::vector<Mapping> &mappings, int N = 1, Callback<void(const std::vector<Mapping>&, const EdgeMatrix&, int)> onEdgeMatrix = {});
-    GedResult gedApprox(const Graph &other, int K, bool buildPath = false, bool verbose = false) const;
     const std::vector<std::vector<int>> &Edges() const;
-    GedResult gedExact(const Graph &other, bool buildPath = false, bool verbose = false, long long maxStates = 5000000) const;
+    GedResult gedApprox(const Graph &other, int K, bool buildPath = false, Callback<void(const GedResult&)> onResult = {}) const;
+    GedResult gedExact(const Graph &other, bool buildPath = false, long long maxStates = 5000000, Callback<void(const GedResult&)> onResult = {}) const;
 };

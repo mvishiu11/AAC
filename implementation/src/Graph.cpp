@@ -873,7 +873,7 @@ namespace {
 
 } // namespace
 
-Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, bool verbose) const
+Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, Callback<void(const GedResult&)> onResult) const
 {
     GedResult res;
     const int nA = this->getVerticesCount();
@@ -979,7 +979,7 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
         const long long edgeCost = edgeL1CostPaddedUnderBijection(*this, nA, other, nB, f);
         const long long total = edgeCost + vertexCost;
 
-        if (verbose)
+        if (onResult.has_value())
         {
             std::cout << "GED candidate #" << i
                       << " vertexCost=" << vertexCost
@@ -1006,7 +1006,7 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, boo
     return res;
 }
 
-Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbose, long long maxStates) const
+Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, long long maxStates, Callback<void(const GedResult&)> onResult) const
 {
     GedResult res;
     const int nA = this->getVerticesCount();
@@ -1082,6 +1082,15 @@ Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbos
             {
                 bestEdge = currentCost;
                 bestF = f;
+                if (onResult.has_value()) {
+                    auto res2 = res;
+                    res2.vertex_ops = vertexCost;
+                    res2.edge_ops = bestEdge;
+                    res2.total_cost = vertexCost + bestEdge;
+                    fillMappingAndVertexListsFromBijection(nA, nB, bestF, res2.mapping_this_to_other, res2.inserted_vertices_in_other, res2.deleted_vertices_in_this);
+                    res2.ops = buildEditPathFromMapping(*this, other, res2.mapping_this_to_other, res2.inserted_vertices_in_other, res2.deleted_vertices_in_this);
+                    onResult.value()(res2);
+                }
             }
             return;
         }
@@ -1133,11 +1142,6 @@ Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbos
         }
     };
 
-    if (verbose)
-    {
-        std::cout << "GED exact: n=" << n << " maxStates=" << maxStates << "\n";
-    }
-
     dfs(0, 0);
 
     res.complete = !stopped;
@@ -1147,8 +1151,10 @@ Graph::GedResult Graph::gedExact(const Graph& other, bool buildPath, bool verbos
     if (!bestF.empty())
     {
         fillMappingAndVertexListsFromBijection(nA, nB, bestF, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
-        if (buildPath)
-            res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+        res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+    }
+    if (onResult.has_value()) {
+        onResult.value()(res);
     }
     return res;
 }
