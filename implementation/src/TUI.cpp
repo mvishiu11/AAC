@@ -72,8 +72,13 @@ void TUI::IsoTUI::redraw() {
     screen.PostEvent(ftxui::Event::Character('r'));
 }
 
+
+
 ftxui::Table TUI::Matrix(const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
     using namespace ftxui;
+    if (matrix.size()>50 || matrix[0].size()>50) {
+        return Table(std::vector<std::vector<ftxui::Element>>{{text("Matrix larger than 50 in either dimension - not displaying it for readability")}});
+    }
     int max = 0;
     for (int i = 0; i<matrix.size(); i++) {
         for (int j = 0; j<matrix.size(); j++) {

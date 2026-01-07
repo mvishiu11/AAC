@@ -134,6 +134,7 @@ int ged(int argc, char **argv) {
         auto r = G.gedExact(H, true, maxStates, update_state);
         state.alter([&r](TUI::GedTUI &tui) {
             tui.result = r;
+            tui.progress = false;
             tui.finished = true;
             tui.message = "Distance found!";
             tui.message_color = ftxui::Color::GreenLight;
@@ -179,11 +180,29 @@ int ged(int argc, char **argv) {
     const int largeN = std::max(G.getVerticesCount(), H.getVerticesCount());
     const int maxInjective = maxK(largeN, smallN);
     K = std::min(K, maxInjective);
+    state.alter([](TUI::GedTUI &tui) {
+        tui.message = "Approximating distance...";
+        tui.message_color = ftxui::Color::Yellow;
+        return true;
+    });
+    auto update_state = [&state](const Graph::GedResult& result) {
+        state.alter([&result](TUI::GedTUI &tui) {
+            tui.result = result;
+            return true;
+        });
+    };
 
-    cout << "\n ===== GRAPH EDIT DISTANCE (APPROX) ===== \n" << endl;
-    auto r = G.gedApprox(H, K, flags.path);
-
-    cout << "GED: " << r.total_cost
+    //cout << "\n ===== GRAPH EDIT DISTANCE (APPROX) ===== \n" << endl;
+    auto r = G.gedApprox(H, K, true, update_state);
+    state.alter([&r](TUI::GedTUI &tui) {
+        tui.result = r;
+        tui.progress = false;
+        tui.finished = true;
+        tui.message = "Distance found!";
+        tui.message_color = ftxui::Color::GreenLight;
+        return true;
+    });
+    /*cout << "GED: " << r.total_cost
             << " (vertex_ops=" << r.vertex_ops
             << ", edge_ops=" << r.edge_ops << ")\n";
     cout << "Mapping (G -> H, -1 means deleted): " << r.mapping_this_to_other << "\n";
@@ -207,7 +226,7 @@ int ged(int argc, char **argv) {
             case T::DelEdge:   cout << "dele(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
             }
         }
-    }
+    }*/
     tui_thread.join();
     exit(0);
 }

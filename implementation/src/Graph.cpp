@@ -889,6 +889,9 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, Cal
         res.total_cost = 0;
         res.vertex_ops = 0;
         res.edge_ops = 0;
+        if (onResult.has_value()) {
+            onResult.value()(res);
+        }
         return res;
     }
     if (std::min(nA, nB) == 0)
@@ -903,6 +906,9 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, Cal
         fillMappingAndVertexListsFromBijection(nA, nB, f, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
         if (buildPath)
             res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
+        if (onResult.has_value()) {
+            onResult.value()(res);
+        }
         return res;
     }
 
@@ -979,20 +985,32 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, Cal
         const long long edgeCost = edgeL1CostPaddedUnderBijection(*this, nA, other, nB, f);
         const long long total = edgeCost + vertexCost;
 
-        if (onResult.has_value())
+        /*if (onResult.has_value())
         {
             std::cout << "GED candidate #" << i
                       << " vertexCost=" << vertexCost
                       << " edgeCost=" << edgeCost
                       << " total=" << total
                       << " mapping=" << map << "\n";
-        }
+        }*/
 
         if (total < bestTotal)
         {
             bestTotal = total;
             bestEdge = edgeCost;
             bestF = f;
+            {
+                auto res2 = res;
+                res2.vertex_ops = vertexCost;
+                res2.edge_ops = bestEdge;
+                res2.total_cost = bestTotal;
+                fillMappingAndVertexListsFromBijection(nA, nB, bestF, res2.mapping_this_to_other, res2.inserted_vertices_in_other, res2.deleted_vertices_in_this);
+                if (buildPath)
+                    res2.ops = buildEditPathFromMapping(*this, other, res2.mapping_this_to_other, res2.inserted_vertices_in_other, res2.deleted_vertices_in_this);
+                if (onResult.has_value()) {
+                    onResult.value()(res2);
+                }
+            }
         }
     }
 
@@ -1002,7 +1020,9 @@ Graph::GedResult Graph::gedApprox(const Graph &other, int K, bool buildPath, Cal
     fillMappingAndVertexListsFromBijection(nA, nB, bestF, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
     if (buildPath)
         res.ops = buildEditPathFromMapping(*this, other, res.mapping_this_to_other, res.inserted_vertices_in_other, res.deleted_vertices_in_this);
-
+    if (onResult.has_value()) {
+        onResult.value()(res);
+    }
     return res;
 }
 
