@@ -436,7 +436,7 @@ void Graph::findMinimalExtension(Graph &G, int N, Callback<void(const std::vecto
     };
     // Recursive DFS over combinations of edge sets
     //int total = choose(count_assignments(G.getVerticesCount(), H.getVerticesCount()),N)*factorial(1, N);
-    function<void(int)> EdgeDfs = [&](int level, int over = 0)
+    function<void(int)> EdgeDfs = [&](int level)
     {
         ++counter;
         int cost = EdgeSetCost(sum);     
@@ -464,7 +464,10 @@ void Graph::findMinimalExtension(Graph &G, int N, Callback<void(const std::vecto
         if (cost > bestCost) {
             return;
         }
-
+        int over = 0;
+        if (!usedEdgeSets.empty()) {
+            over = *usedEdgeSets.rbegin();
+        }
         for (size_t i = over; i < all_Edgesets.size(); i++)
         {
             if (usedEdgeSets.count(i) == 0)

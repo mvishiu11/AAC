@@ -102,7 +102,7 @@ ftxui::Table TUI::Matrix(const std::vector<std::vector<int>> &matrix, std::funct
 ftxui::Component TUI::MatrixC(std::string &label, const std::vector<std::vector<int>> &matrix, std::function<ftxui::Decorator(int x, int y)> st) {
     auto child = ftxui::Renderer([&label, &matrix, st]{
         auto m = Matrix(matrix, st);
-        return window(ftxui::text(label),m.Render());
+        return window(ftxui::text(label),ftxui::vbox({m.Render(), ftxui::filler()}));
     }); 
     return ftxui::CatchEvent(child,[](ftxui::Event ev){return ev==ftxui::Event::Custom;});
 }
@@ -125,6 +125,7 @@ void TUI::IsoTUI::run() {
     auto isomorphisms = ftxui::Renderer([this,&scroll_x]{
         ftxui::Elements children;
         int ind = 1;
+        children.push_back(separator());
         for (auto v: found_mappings) {
             ftxui::Elements elems;
             {
@@ -137,12 +138,13 @@ void TUI::IsoTUI::run() {
             for (int i = 0; i<v.size(); i++) {
                 std::ostringstream t;
                 //t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
-                t << i+1 << " => " << v[i]+1;
+                t << " " << i+1 << " => " << v[i]+1 << " " ;
                 elems.push_back(ftxui::text(t.str())|center);
             }
-            children.push_back(ftxui::vbox(elems)|ftxui::border);
+            children.push_back(ftxui::vbox(elems));
+            children.push_back(separator());
         }
-        return hbox(children) | focusPositionRelative(scroll_x, 0) | xframe | flex;
+        return window(text(std::string(" Isomorphic mappings (G => H) ")),hbox(children) | center);
     });
     
     auto outputTab = Container::Vertical({e});
@@ -160,6 +162,23 @@ void TUI::IsoTUI::run() {
         }
         return spinner(17,frame)|color(colors);
     });
+
+    int tab_selector = 0;
+    std::vector<std::string> headers{" G "," H "," Extension "," Isomorphic Mappings "}; 
+    auto toggle = Renderer([&headers, &tab_selector]{
+        ftxui::Elements elems;
+        elems.push_back(ftxui::separator());
+        for (int i = 0; i<headers.size(); i++) {
+            if (i==tab_selector) {
+                elems.push_back(text(headers[i])|bold);
+                elems.push_back(ftxui::separator());
+            } else {
+                elems.push_back(text(headers[i])|color(Color::GrayDark));
+                elems.push_back(ftxui::separator());
+            }
+        }
+        return hbox(elems) | center;
+    });
     auto handler = CatchEvent([&](Event ev){
         if (ev == Event::Character(' ')) {
             original = !original;
@@ -171,21 +190,26 @@ void TUI::IsoTUI::run() {
             }
             exit(0);
         } else if (ev == Event::ArrowRight) {
-            scroll_x += 0.25f;
-            scroll_x = std::clamp(scroll_x, 0.f, 1.f);
+            tab_selector = std::clamp(tab_selector+1,0, 3);
         } else if (ev == Event::ArrowLeft) {
-            scroll_x -= 0.25f;
-            scroll_x = std::clamp(scroll_x, 0.f, 1.f);
+            tab_selector = std::clamp(tab_selector-1,0, 3);
         }
         return false;
+    });
+    auto ext = Renderer([this, &e] {
+        std::string txt = "Extension cost: " + std::to_string(extension_cost);
+        return vbox({e->Render(), text(txt)});
     });
     auto renderer = Renderer([&] {
         return vbox({
             hbox(text(message) | color(message_color), filler(), indicator->Render()),
             separator(),
-            matrices->Render(),
+            Container::Tab({
+                g,h,ext, isomorphisms
+            }, &tab_selector)->Render(),
+            filler(),
             separator(),
-            window(text(" Isomorphic mappings (G[i] => H[j]) "), isomorphisms->Render() | center)
+            toggle->Render(),
         }) | border;
     });
     bool running = true;

@@ -92,6 +92,23 @@ void TUI::GedTUI::run() {
         }
         return spinner(17,frame)|color(colors);
     });
+
+    int tab_selector = 0;
+    std::vector<std::string> headers{" G "," H ", " Result "}; 
+    auto toggle = Renderer([&headers, &tab_selector]{
+        ftxui::Elements elems;
+        elems.push_back(ftxui::separator());
+        for (int i = 0; i<headers.size(); i++) {
+            if (i==tab_selector) {
+                elems.push_back(text(headers[i])|bold);
+                elems.push_back(ftxui::separator());
+            } else {
+                elems.push_back(text(headers[i])|color(Color::GrayDark));
+                elems.push_back(ftxui::separator());
+            }
+        }
+        return hbox(elems) | center;
+    });
     auto handler = CatchEvent([&](Event ev){
         if (ev == Event::Character(' ')) {
             original = !original;
@@ -102,19 +119,35 @@ void TUI::GedTUI::run() {
                 std::cout << std::endl << "Aborted!" << std::endl;
             }
             exit(0);
+        } else if (ev == Event::ArrowRight) {
+            tab_selector = std::clamp(tab_selector+1,0, 3);
+        } else if (ev == Event::ArrowLeft) {
+            tab_selector = std::clamp(tab_selector-1,0, 3);
         }
         return false;
     });
-
+    
     auto mapping = ftxui::Renderer([this]{
         ftxui::Elements elems;
         {
             elems.push_back(ftxui::text("G => H")|center);
+            elems.push_back(separator());
         }
         for (int i = 0; i<result.mapping_this_to_other.size(); i++) {
             std::ostringstream t;
-            t << i+1 << " => " << result.mapping_this_to_other[i]+1;
-            elems.push_back(ftxui::text(t.str())|center);
+            if (result.mapping_this_to_other[i]<0) {
+                t << " " << i+1 << " (removed) ";
+                elems.push_back(ftxui::text(t.str())|color(Color::RedLight));
+            } else {
+                t << " " << i+1 << " => " << result.mapping_this_to_other[i]+1;
+                elems.push_back(ftxui::text(t.str()));
+            }
+        }
+        int offset=result.mapping_this_to_other.size();
+        for (int i = 0; i<result.inserted_vertices_in_other.size(); i++) {
+            std::ostringstream t;
+            t << " " << i+1+offset << " => " << result.inserted_vertices_in_other[i]+1 << " (added) ";
+            elems.push_back(ftxui::text(t.str())|color(Color::GreenLight));
         }
         elems.push_back(filler());
         return window(text(" Isomorphic mapping "), vbox(elems));
@@ -122,39 +155,53 @@ void TUI::GedTUI::run() {
     auto operations = ftxui::Renderer([this]{
         using Type = Graph::GedEditOp::Type;
         ftxui::Elements elems;
+        int opind = 1;
         for (int i = 0; i<result.ops.size(); i++) {
             std::ostringstream t;
             ftxui::Color col = Color::White;
-            //t << "G[" << i+1 << "]=>H[" << v[i]+1 << "]";
             auto &op = result.ops[i];
             switch (op.type) {
             case Graph::GedEditOp::Type::AddVertex:
-                t << "add vertex " << op.from;
+                t << " " << opind << ") " << "add vertex " << op.from+1 << " ";
                 col = Color::GreenLight;
+                opind+=1;
                 break;
             case Graph::GedEditOp::Type::DelVertex:
-                t << "remove vertex " << op.from;
+                t << " " << opind << ") " << "remove vertex " << op.from+1 << " ";
                 col = Color::RedLight;
+                opind+=1;
                 break;
             case Graph::GedEditOp::Type::AddEdge:
-                t << "add edge " << op.from << "->" << op.to <<", " << op.multiplicity << " times";
+                if (op.multiplicity>1) {
+                    t << " " << opind << "-" << opind+op.multiplicity-1 <<  ") ";
+                } else {
+                    t << " " << opind << ") ";
+                }
+                opind += op.multiplicity;
+                t << "add edge " << op.to+1 << "->" << op.from+1 <<", " << op.multiplicity << " times ";
                 col = Color::GreenLight;
                 break;
             case Graph::GedEditOp::Type::DelEdge:
-                t << "remove edge " << op.from << "->" << op.to <<", " << op.multiplicity << " times";
+                if (op.multiplicity>1) {
+                    t << " " << opind << "-" << opind+op.multiplicity-1 <<  ") ";
+                } else {
+                    t << " " << opind << ") ";
+                }
+                opind += op.multiplicity;
+                t << "remove edge " << op.to+1 << "->" << op.from+1 <<", " << op.multiplicity << " times ";
                 col = Color::RedLight;
                 break;
               break;
             }
-            elems.push_back(ftxui::text(t.str())| color(col) |center);
+            elems.push_back(ftxui::text(t.str())| color(col));
         }
         elems.push_back(filler());
         return window(text(" Edit Path "), vbox(elems));
     });
     auto stats = ftxui::Renderer([this]{
-        std::string total = "Distance: " + std::to_string(result.total_cost);
-        std::string vert = "Vertex operations: " + std::to_string(result.vertex_ops);
-        std::string edge = "Edge operations: " + std::to_string(result.edge_ops);
+        std::string total = " Distance: " + std::to_string(result.total_cost) + " ";
+        std::string vert = " Vertex operations: " + std::to_string(result.vertex_ops) + " ";
+        std::string edge = " Edge operations: " + std::to_string(result.edge_ops) + " ";
         return window(text(" Information "), vbox({
             text(total) | color(Color::GreenLight),
             text(vert) | color(Color::White),
@@ -162,16 +209,24 @@ void TUI::GedTUI::run() {
             filler()
         }));
     });
+
+    auto results = Renderer([&]{
+        return hbox({
+                mapping->Render() | flex,
+                operations->Render() | flex,
+                stats->Render() | flex,
+            }) | center | xflex_grow;
+    });
     auto renderer = Renderer([&] {
         return vbox({
             hbox(text(message) | color(message_color), filler(), indicator->Render()),
             separator(),
-            matrices->Render(),
-            hbox({
-                mapping->Render() | flex,
-                operations->Render() | flex,
-                stats->Render() | flex,
-            }) | center | xflex_grow
+            Container::Tab({
+                g,h, results
+            }, &tab_selector)->Render(),
+            filler(),
+            separator(),
+            toggle->Render()
         }) | border;
     });
     bool running = true;
