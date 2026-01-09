@@ -47,7 +47,7 @@ int maxK(int h, int g)
     long long result = 1;
     for (int i = 0; i < g; ++i)
     {
-        if (result > 2000000000/(h-i)) return 2000000000;
+        if (result > 200000000/(h-i)) return 200000000;
         result *= (h - i);
     }
     return (int)result;
@@ -59,59 +59,47 @@ void usage(char *name) {
 }
 
 void usage_iso(char *name) {
-    std::cout << "Usage: " << name << " iso <exact|approx> <path/to/input> <N>" << std::endl;
+    std::cout << "Usage: " << name << " iso <exact|approx> <path> <N>" << std::endl;
+    std::cout << "<exact|approx> - should the program use exact or approximation algorithm?" << std::endl;
+    std::cout << "<path> - path to the input file" << std::endl;
+    std::cout << "<N> - the number of subgraph isomorphisms to search for" << std::endl;
     exit(-1);
 }
 
 void usage_ged(char *name) {
-    std::cout << "Usage: " << name << " ged <exact|approx> <path> <K>" << std::endl;
+    std::cout << "Usage: " << name << " ged <exact|approx> <path>" << std::endl;
     std::cout << "<exact|approx> - should the program use exact or approximation algorithm?" << std::endl;
     std::cout << "<path> - path to the input file" << std::endl;
-    std::cout << "<K> - the upper bound on the mappings checked by the approximation algorithm; ignored in case of the exact algorithm" << std::endl;
     exit(-1);
 }
 
 int ged(int argc, char **argv) {
-    // New forms:
-    //   main ged exact <file> [v] [p]
-    //   main ged approx <file> <K> [v] [p]
-    // Backward-compatible:
-    //   main ged <file> <K> [v] [p]  == approx
-
     std::string sub = argv[2];
     std::string filename;
-    int K = 0;
-    CliFlags flags;
-    flags.path = true;
-    flags.verbose = true;
     
     if (sub == "exact")
     {
         if (argc < 4) usage_ged(argv[0]);
         filename = argv[3];
-        //flags = parseFlags(argc, argv, 4);
     }
     else if (sub == "approx")
     {
-        if (argc < 5) usage_ged(argv[0]);
+        if (argc < 4) usage_ged(argv[0]);
         filename = argv[3];
-        K = stoi(argv[4]);
-        //flags = parseFlags(argc, argv, 5);
     }
     else
     {
         // backward-compatible approx
-        if (argc < 4) usage_ged(argv[0]);
+        if (argc < 3) usage_ged(argv[0]);
         filename = argv[2];
-        K = stoi(argv[3]);
-        flags = parseFlags(argc, argv, 4);
         sub = "approx";
     }
 
-    const bool verbose = flags.verbose;
     auto graphs = parseInput(filename);
     Graph G = graphs.first;
     Graph H = graphs.second;
+
+    int K = 50 * std::max(G.getVerticesCount(), H.getVerticesCount());
     TUI::GedTUI state(G,H);
     std::thread tui_thread([&state]{
         state.run();
@@ -124,7 +112,6 @@ int ged(int argc, char **argv) {
                 return true;
             });
         };
-        //cout << "\n ===== GRAPH EDIT DISTANCE (EXACT) ===== \n" << endl;
         state.alter([](TUI::GedTUI &tui) {
             tui.message = "Calculating distance...";
             tui.message_color = ftxui::Color::Yellow;
@@ -140,34 +127,6 @@ int ged(int argc, char **argv) {
             tui.message_color = ftxui::Color::GreenLight;
             return true;
         });
-        /*cout << "GED: " << r.total_cost
-                << " (vertex_ops=" << r.vertex_ops
-                << ", edge_ops=" << r.edge_ops << ")\n";
-        cout << "Mapping (G -> H, -1 means deleted): " << r.mapping_this_to_other << "\n";
-        cout << "Exact: complete=" << (r.complete ? "true" : "false")
-                << " states_visited=" << r.states_visited
-                << " states_pruned=" << r.states_pruned << "\n";
-
-        if (!r.inserted_vertices_in_other.empty())
-            cout << "Inserted vertices in H: " << r.inserted_vertices_in_other << "\n";
-        if (!r.deleted_vertices_in_this.empty())
-            cout << "Deleted vertices in G: " << r.deleted_vertices_in_this << "\n";
-
-        if (flags.path)
-        {
-            cout << "\n--- Edit path (aggregated) ---\n";
-            for (const auto &op : r.ops)
-            {
-                using T = Graph::GedEditOp::Type;
-                switch (op.type)
-                {
-                case T::AddVertex: cout << "addv(" << op.from << ")\n"; break;
-                case T::DelVertex: cout << "delv(" << op.from << ")\n"; break;
-                case T::AddEdge:   cout << "adde(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
-                case T::DelEdge:   cout << "dele(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
-                }
-            }
-        }*/
         tui_thread.join();
         return 0;
     }
@@ -192,7 +151,6 @@ int ged(int argc, char **argv) {
         });
     };
 
-    //cout << "\n ===== GRAPH EDIT DISTANCE (APPROX) ===== \n" << endl;
     auto r = G.gedApprox(H, K, true, update_state);
     state.alter([&r](TUI::GedTUI &tui) {
         tui.result = r;
@@ -202,31 +160,6 @@ int ged(int argc, char **argv) {
         tui.message_color = ftxui::Color::GreenLight;
         return true;
     });
-    /*cout << "GED: " << r.total_cost
-            << " (vertex_ops=" << r.vertex_ops
-            << ", edge_ops=" << r.edge_ops << ")\n";
-    cout << "Mapping (G -> H, -1 means deleted): " << r.mapping_this_to_other << "\n";
-
-    if (!r.inserted_vertices_in_other.empty())
-        cout << "Inserted vertices in H: " << r.inserted_vertices_in_other << "\n";
-    if (!r.deleted_vertices_in_this.empty())
-        cout << "Deleted vertices in G: " << r.deleted_vertices_in_this << "\n";
-
-    if (flags.path)
-    {
-        cout << "\n--- Edit path (aggregated) ---\n";
-        for (const auto &op : r.ops)
-        {
-            using T = Graph::GedEditOp::Type;
-            switch (op.type)
-            {
-            case T::AddVertex: cout << "addv(" << op.from << ")\n"; break;
-            case T::DelVertex: cout << "delv(" << op.from << ")\n"; break;
-            case T::AddEdge:   cout << "adde(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
-            case T::DelEdge:   cout << "dele(" << op.from << " -> " << op.to << ") x" << op.multiplicity << "\n"; break;
-            }
-        }
-    }*/
     tui_thread.join();
     exit(0);
 }
